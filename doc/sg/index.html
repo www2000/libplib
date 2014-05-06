@@ -1,0 +1,1107 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML>
+<HEAD>
+   <META http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+   <META name="keywords" content="SG, PLIB, OpenGL, simple, geometry, library, portable, matrix, quaternion, vector, math, Baker, Steve">
+   <META name="description" content="The PLIB Simple Geometry (SG) Library is simple set of matrix, quaternion and vector math functions that are useful for all sorts of OpenGL applications.">
+   <TITLE>A Simple Geometry library for OpenGL.</TITLE>
+</HEAD>
+<BODY text="#B5A642" link="#8FFF8F" vlink="#18A515" alink="#20336B"
+ bgcolor="#005000" background="../marble.png">
+
+<TABLE>
+<TR>
+<TD>
+<H1>A Simple Geometry library for OpenGL</H1>
+</TD>
+</TR>
+<TR>
+<TD>
+               by Steve Baker
+</TD>
+</TR>
+</TABLE>
+<H2>Introduction</H2>
+Simple Geometry (SG) is simple set of matrix, quaternion and vector
+math functions that were originally written to support the SSG
+(Simple Scene Graph) API - but which are rather useful
+for all sorts of OpenGL applications.
+<p>
+SG is now a part of <A HREF="../index.html">PLIB</A>.
+<p>
+Since SG is designed to work with OpenGL, it uses similar
+naming conventions - all SG functions and other tokens
+that work with 'float' precision math begin with 'sg' or 'SG'.
+There are a complete duplicate set that work with double-precision
+math that begin with 'sgd' or 'SGD'.
+<p>
+Most SG functions are implemented as 'inline' C++
+functions - for speed. The underlying data types are
+mostly just arrays of 'float' - which is generally the most
+efficient type for OpenGL programs.
+<p>
+SGD functions are absolutely identical to their SG
+eqivelents - except for working at double precision.
+This document doesn't describe the SGD functions, types
+and constants. That would just be a waste of space - they
+are just identical to the SG versions.
+<H2>Usage.</H2>
+You need to #include "sg.h" and link to the SG binary.
+<H2>Basic SG Types.</H2>
+Most SG functions operate on SGfloat data elements - which
+are normally '#define'd as 'float'. Common data types are:
+<pre>
+
+  SGfloat    -- A floating point number.
+  sgVec2     -- A two   element array of SGfloat
+  sgVec3     -- A three element array of SGfloat
+  sgVec4     -- A four  element array of SGfloat
+
+  sgMat4     -- A 4x4 element array of SGfloat
+
+  sgCoord    -- A simple structure used to hold
+                euler rotation angles and a 3D
+                translation:
+
+       struct sgCoord
+       {
+         sgVec3 xyz ;
+         sgVec3 hpr ;
+       } ;
+
+  sgLine3    -- An infinite line defined by a point
+                somewhere on the line and a normalized
+                direction vector.
+
+       struct sgLine3
+       {
+	 sgVec3 point_on_line ;
+	 sgVec3 direction_vector ;  /* Should be a unit vector */
+       } ;
+
+  sgLineSegment3 -- A finite line segment defined by it's
+                end-points.
+
+       struct sgLineSegment3
+       {
+	 sgVec3 a ;
+	 sgVec3 b ;
+       } ;
+
+  sgQuat     -- An sgVec4 holding the values (x, y, z, w),
+                representing the quaternion w + xi + yj + zk.
+
+  class sgSphere   -- A sphere
+  class sgBox      -- An axially aligned box.
+  class sgFrustum  -- An OpenGL-style view frustum
+
+  ...and the same again but in 'double' precision:
+
+    SGDfloat, sgdVec2, sgdVec3, sgdVec4,
+    sgdMat4, sgdCoord, sgdQuat, sgdSphere,
+    sgdBox, sgdFrustum
+
+</pre>
+Note 1: All angles used by or produced by SG are in degrees.
+<p>
+Note 2: Some functions refer to 'angle+axis' notation for rotations,
+this is the same format that glRotate uses.
+<H3>sgVec*</H3>
+The sgVec* types are just simple arrays - designed especially
+to hold values for OpenGL vertices, normals, texture coordinates
+and colours with the minimum of fuss. These arrays come in 2, 3 and
+four element versions - and almost all SG functions that can
+operate on an sgVec are provided in three appropriately named
+versions, one for each length varient. By convention, the
+elements are in the order:
+<ul>
+<li> (X,Y), (X,Y,Z), (X,Y,Z,W) for vertices
+<li> (S,T), (S,T,R), (S,T,R,Q) for texture coordinates
+<li> (R,G,B), (R,G,B,A) for colours (two element arrays don't
+       make much sense as colours).
+<li> (H,P,R) for heading/pitch/roll euler angle triplets.
+<li> (nX,nY,nZ) for normals.
+<li> (A,B,C,D) for plane equations.
+</ul>
+<H3>Lines</H3>
+A couple of SG functions take or produce data for a line in space.
+There are generally two ways to specify a 3D line, either as
+two points that lie on the line - or as one point and a direction
+vector.
+<p>
+SG calls the first form a "line segment" (sgLineSegment3) and the
+second form an "infinite line" (sgLine3).
+<p>
+You can find the infinite line that is the extension of a line segment
+using:
+<pre>
+
+  void sgLineSegment3ToLine3 ( sgLine3 *line,
+                         const sgLineSegment3 lineseg ) ;
+
+</pre>
+You can also find the distance from a point to either a line
+or a line segment using:
+<pre>
+
+  SGfloat sgDistToLineVec3               ( const sgLine3 line,
+					   const sgVec3  pnt )
+  SGfloat sgDistToLineSegmentVec3        ( const sgLineSegment3 line,
+					   const sgVec3  pnt )
+  SGfloat sgDistSquaredToLineVec3        ( const sgLine3 line,
+					   const sgVec3  pnt ) ;
+  SGfloat sgDistSquaredToLineSegmentVec3 ( const sgLineSegment3 line,
+					   const sgVec3  pnt ) ;
+
+</pre>
+Try to use the 'Squared' versions if you can because you
+save a costly sqrt() function.
+<H3>sgMat4</H3>
+sgMat4 arrays are SM_float[4][4] arrays for convenience - but notice
+that the order of the elements is such that you can take the
+address of an sgMat4, cast that into a 'float *' ('double *' for
+SGD) and pass the result to any OpenGL matrix function. eg:
+<pre>
+
+   sgMat4 m ;
+   sgMakeIdentMat4 ( m ) ;
+   glLoadMatrixf ( (GMfloat *) m ) ;
+
+...or...
+
+   sgdMat4 m ;
+   sgdMakeIdentMat4 ( m ) ;
+   glLoadMatrixd ( (GMdouble *) m ) ;
+
+</pre>
+Another way to look at this is to treat an sgMat4 as an array
+of four sgVec4's. This is convenient for quite a few reasons.
+For example, you can extract the sgVec3 that represents the
+translation part of an sgMat4 by just using mat[3] anywhere
+where an sgMat3 would be appropriate.
+<H3>sgTriangleSolver functions</H3>
+Remember all those high-school trig problems (eg "Given two
+sides and included angle, find length of remaining side")...
+nope - neither do I.  That's why these functions are useful.
+<p>
+<TABLE>
+<TR>
+<TD>
+NOTES:
+<ul>
+<li> lenA, lenB, lenC = The lengths of sides A, B and C.
+<li> angA, angB, angC = The angles opposite sides A, B and C.
+<li> SSS = Three sides.
+<li> SAS = Two sides and the angle between them.
+<li> ASA = Two angles and the side between them.
+<li> SAA = One side and two angles that don't include it.
+<li> ASS = Two sides and one angle that's not between them.
+</ul>
+</TD>
+<TD>
+<center><IMG SRC="triangle_params.png" ALT="Triangle" WIDTH=256 HEIGHT=256></center>
+</TD>
+</TR>
+</TABLE>
+A triangle can be specified completely using the 'SSS', 'SAS',
+'SSA' and 'ASA' methods - but if you only know two sides and an
+angle that's NOT between those two sides (the 'ASS' method) then
+there are often two possible triangles that fit that description.
+<p>
+Hence (in the ASS case), SG needs to know whether one of the
+unknown vertices is greater than 90 degrees (Obtuse) or less
+than 90 degrees (Acute).  Hence the two routines below that use
+ASS notation have to be told whether angA is Obtuse or not.
+<pre>
+
+void sgTriangleSolver_SSStoAAA ( SGfloat  lenA, SGfloat  lenB, SGfloat  lenC,
+                                 SGfloat *angA, SGfloat *angB, SGfloat *angC ) ;
+void sgTriangleSolver_SAStoASA ( SGfloat  lenA, SGfloat  angB, SGfloat  lenC,
+                                 SGfloat *angA, SGfloat *lenB, SGfloat *angC ) ;
+void sgTriangleSolver_ASAtoSAS ( SGfloat  angA, SGfloat  lenB, SGfloat  angC,
+                                 SGfloat *lenA, SGfloat *angB, SGfloat *lenC ) ;
+void sgTriangleSolver_SAAtoASS ( SGfloat  lenA, SGfloat  angB, SGfloat  angA,
+                                 SGfloat *angC, SGfloat *lenB, SGfloat *lenC ) ;
+void sgTriangleSolver_ASStoSAA ( SGfloat  angB, SGfloat  lenA, SGfloat  lenB,
+                                 bool angA_is_obtuse,
+                                 SGfloat *lenC, SGfloat *angA, SGfloat *angC ) ;
+
+</pre>
+These functions take three parameters which are a mixture of lengths and angles
+for an arbitary triangle.  They return the missing three parameters.
+In all cases of 'degenerate' triangles (eg zero angles, zero lengths), the
+package comes up with a plausible result - although it may not be a unique
+solution.  This should be robust and more roundoff-error-tolerant than
+producing an error return.
+<p>
+Impossible triangles will produce all-zero results.
+<p>
+If one or more of the results are not needed, pass a NULL pointer for it
+and the package can avoid doing the unnecessary trig and perhaps run a
+little faster.
+<pre>
+
+SGfloat sgTriangleSolver_ASAtoArea ( SGfloat angA, SGfloat lenB, SGfloat angC ) ;
+SGfloat sgTriangleSolver_SAStoArea ( SGfloat lenA, SGfloat angB, SGfloat lenC ) ;
+SGfloat sgTriangleSolver_SSStoArea ( SGfloat lenA, SGfloat lenB, SGfloat lenC ) ;
+SGfloat sgTriangleSolver_SAAtoArea ( SGfloat lenA, SGfloat angB, SGfloat angA ) ;
+SGfloat sgTriangleSolver_ASStoArea ( SGfloat angB, SGfloat lenA, SGfloat lenB,
+                                     bool angA_is_obtuse ) ;
+
+</pre>
+These compute the area of a triangle from three parameters.  Impossible
+triangles (eg lenA > lenB+lenC) return zero areas.
+<H3>sgCoord</H3>
+This simple structure contains two members - each of type
+'sgVec3' - the first is 'xyz', the second 'hpr' - and together,
+they represent a rotation followed by a translation.
+<p>
+There is a rich set of functions to interconvert sgCoord's and
+sgMat4's.
+<H3>sgQuat</H3>
+The sgQuat is an array of four floats, (x, y, z, w), respresenting
+the quaternion q = w + xi + yj + zk.
+<p>
+It can be used to encode rotations.
+The quaternion (sin(a) * v, cos(a)) rotates 2*a about the vector v.
+<p>
+There is a rich set of functions to interconvert sgQuat's and
+other rotation structures.
+<H3>sgSphere</H3>
+An sgSphere contains a sgVec3 for the center of the sphere and
+an SGfloat for the radius.
+<pre>
+
+class sgSphere
+{
+public:
+  sgVec3  center ;
+  SGfloat radius ;
+
+  SGfloat *getCenter (void) ;
+  SGfloat  getRadius (void) ;
+
+  void setCenter ( SGfloat x, SGfloat y, SGfloat z ) ;
+  void setRadius ( SGfloat r ) ;
+
+  int isEmpty (void) ;
+  void empty  (void) ;
+
+  void orthoXform ( sgMat4 m ) ;
+
+  void extend ( sgSphere *s ) ;
+  void extend ( sgBox    *b ) ;
+  void extend ( sgVec3    v ) ;
+
+  int intersects ( sgSphere *s ) ;
+  int intersects ( sgVec4 plane ) ;
+  int intersects ( sgBox *b ) ;
+} ;
+
+</pre>
+Since sgSphere's are frequently used as simple bounding shapes
+for field-of-view culling, it's quite useful to be able to represent
+an 'empty' sphere. This is represented using a sphere of
+Negative radius.
+<p>
+The 'isEmpty()' function tests to see if a sphere is empty and the
+'empty()' function forces the sphere to be empty.
+<p>
+The 'orthoXform(m)' function transforms the sphere using the matrix
+'m' - which must be orthographic (since transforming a sphere
+by a non-ortho matrix yields something that's no longer spherical).
+<p>
+Three 'extend' functions allow you to expand the sphere to
+encompass other shapes. These functions attempt to minimise
+the radius of the resulting sphere:
+<pre>
+
+  void extend ( sgSphere *s ) ;
+  void extend ( sgBox    *b ) ;
+  void extend ( sgVec3    v ) ;
+
+</pre>
+There are also three intersection tests that return TRUE if the
+volume contained by the sphere intersects the volume contained
+by the other object:
+<pre>
+
+  int intersects ( sgSphere *s ) ;
+  int intersects ( sgBox *b ) ;
+  int intersects ( sgVec4 plane ) ;
+
+</pre>
+('plane' in this context means the semi-infinite volume bounded
+by that plane).
+<H3>sgBox</H3>
+An sgBox contains an sgVec3 for the vertex of the cube
+at the minimum (X,Y,Z)  and another at the maximum (X,Y,Z).
+<pre>
+
+class sgBox
+{
+public:
+  sgVec3 min ;
+  sgVec3 max ;
+
+  SGfloat *getMin (void) ;
+  SGfloat *getMax (void) ;
+
+  void setMin ( SGfloat x, SGfloat y, SGfloat z ) ;
+  void setMax ( SGfloat x, SGfloat y, SGfloat z ) ;
+
+  int isEmpty(void) ;
+  void empty (void) ;
+
+  void extend  ( sgSphere *s ) ;
+  void extend  ( sgBox    *b ) ;
+  void extend  ( sgVec3    v ) ;
+
+  int intersects ( sgSphere *s ) ;
+  int intersects ( sgBox    *b ) ;
+  int intersects ( sgVec4   plane ) ;
+} ;
+
+
+</pre>
+Since sgBox'es are frequently used as simple bounding shapes
+for field-of-view culling, it's quite useful to be able to represent
+an 'empty' box. This is represented using a box whose minumum vertex
+has larger X, Y or Z than its maximum vertex.
+<p>
+The 'isEmpty()' function tests to see if a box is empty and the
+'empty()' function forces the box to be empty.
+<p>
+Three 'extend' functions allow you to expand the box to
+encompass other shapes. These functions attempt to minimise
+the size of the resulting box:
+<pre>
+
+  void extend ( sgSphere *s ) ;
+  void extend ( sgBox    *b ) ;
+  void extend ( sgVec3    v ) ;
+
+</pre>
+There are also three intersection tests that return TRUE if the
+volume contained by the box intersects the volume contained
+by the other object:
+<pre>
+
+  int intersects ( sgSphere *s ) ;
+  int intersects ( sgBox *b ) ;
+  int intersects ( sgVec4 plane ) ;
+
+</pre>
+('plane' in this context means the semi-infinite volume bounded
+by that plane).
+<H3>sgFrustum</H3>
+An sgFrustum corresponds to the set of parameters that is
+used to describe an OpenGL view frustum.
+<pre>
+
+class sgFrustum
+{
+public:
+
+  sgFrustum (void) ;
+
+  void setFrustum ( SGfloat left  , SGfloat right,
+                    SGfloat bottom, SGfloat top,
+                    SGfloat near  , SGfloat far ) ;
+  void setFOV     ( SGfloat h, SGfloat v ) ;
+  void setNearFar ( SGfloat n, SGfloat f ) ;
+ 
+  SGfloat getHFOV (void) ;
+  SGfloat getVFOV (void) ;
+  SGfloat getNear (void) ;
+  SGfloat getFar  (void) ;
+  SGfloat getLeft (void) ;
+  SGfloat getRight(void) ;
+  SGfloat getTop  (void) ;
+  SGfloat getBot  (void) ;
+
+  void getFOV     ( SGfloat *h, SGfloat *v ) ;
+  void getNearFar ( SGfloat *n, SGfloat *f ) ;
+
+  int  contains ( sgVec3    p ) ;
+  int  contains ( sgSphere *s ) ;
+} ;
+
+</pre>
+There are two ways to use an sgFrustum:
+<ul>
+<li> You can call setNearFar() and setFOV() to set the near/far
+     clip planes and the field of view (in degrees - horizontally
+     and vertically). You can use all the get*() functions to
+     query the frustum.
+<li> You can call setFrustum - with the same parameters as you'd
+     pass to a glFrustum command. You can subsequently update the
+     near/far planes with setNearFar() and use all the get*()
+     functions EXCEPT getFOV(). Since glFrustum allows one to
+     define all kinds of skewed frustums, it is impossible to
+     return meaningful FOV figures.
+</ul>
+The constructor for an sgFrustum produces a simple
+45 degree by 45 degree frustum with the near clip
+at one unit and the far clip at one million units.
+When using setFOV, the application programmer should be
+aware that aspect ratios are not enforced, thus these
+ratios can deviate from the window aspect ratio.
+If this happens, a sphere will look like an ellipse.
+<pre>
+
+  int  contains ( sgVec3    p ) ;
+  int  contains ( sgSphere *s ) ;
+
+</pre>
+...returns SG_OUTSIDE if the point or sphere lies entirely outside
+the volume contained by the frustum, SG_INSIDE if it lies entirely
+inside the frustum - or SG_STRADDLE if they only partially overlap.
+<H2>Constants.</H2>
+Since finding a portable definition for PI is impossible (thanks Mr Gates),
+SG supplies a suitable definition - and some convenience multipliers
+to convert degrees to radians and back again.
+<pre>
+
+#define SG_PI
+#define SG_DEGREES_TO_RADIANS
+#define SG_RADIANS_TO_DEGREES
+
+</pre>
+<H2>Vector functions:</H2>
+Pretty much all the low level vector functions are available for
+sgVec2, sgVec3 and sgVec4. The order of parameters is always
+destination first, operands next - in the order that you'd
+write them in a C-style assignment statement. Hence (for example):
+<pre>
+
+  sgAddVec3 ( dst, a, b ) ;   /* dst = a + b ; */
+  sgAddVec3 ( dst, a ) ;      /* dst += a ; */
+
+</pre>
+The following functions exist:
+<ul>
+<li>  Zero      - set all elements to zero.
+<li>  Set       - set each element individually.
+<li>  Add       - add vectors element by element.
+<li>  Sub       - subtract vectors element by element.
+<li>  Scale     - multiply each element of a vector by a variable.
+<li>  AddScaled - dst+=src*scale or dst = a + b * scale.
+<li>  Negate    - negate each element of a vector.
+<li>  Compare   - compare vectors element by element with optional tolerance.
+              (return TRUE if vectors are equal - within tolerances)
+<li>  Equal     - return TRUE if vectors are exactly equal.
+<li>  Length    - compute length of a vector.
+<li>  Distance  - compute distance between two points.
+<li>  DistanceSquared - compute the square of the distance between two points.
+<li>  ScalarProduct - scalar (dot) product.
+<li>  VectorProduct - vector (cross) product (3-element vectors ONLY!).
+<li>  Normalise/Normalize - make vector be one unit long.
+<li>  Lerp      - linear interpolate between a and b by fraction 'f'.
+<li>  LerpAngle - Lerp allowing for the modulo-360 problem.
+</ul>
+Here are all the function prototypes - as you can see, the names
+are 100% consistent and the paramter order is easy to remember.
+<pre>
+  void sgZeroVec2 ( sgVec2 dst ) ;
+  void sgZeroVec3 ( sgVec3 dst ) ;
+  void sgZeroVec4 ( sgVec4 dst ) ;
+
+  void sgSetVec2  ( sgVec2 dst, SGfloat x, SGfloat y ) ;
+  void sgSetVec3  ( sgVec3 dst, SGfloat x, SGfloat y, SGfloat z ) ;
+  void sgSetVec4  ( sgVec4 dst, SGfloat x, SGfloat y, SGfloat z, SGfloat w ) ;
+
+  void sgCopyVec2 ( sgVec2 dst, sgVec2 src )
+  void sgCopyVec3 ( sgVec3 dst, sgVec3 src )
+  void sgCopyVec4 ( sgVec4 dst, sgVec4 src )
+
+  void sgAddVec2  ( sgVec2 dst, sgVec2 src )
+  void sgAddVec3  ( sgVec3 dst, sgVec3 src )
+  void sgAddVec4  ( sgVec4 dst, sgVec4 src )
+
+  void sgAddVec2  ( sgVec2 dst, sgVec2 src1, sgVec2 src2 )
+  void sgAddVec3  ( sgVec3 dst, sgVec3 src1, sgVec3 src2 )
+  void sgAddVec4  ( sgVec4 dst, sgVec4 src1, sgVec4 src2 )
+
+  void sgSubVec2  ( sgVec2 dst, sgVec2 src )
+  void sgSubVec3  ( sgVec3 dst, sgVec3 src )
+  void sgSubVec4  ( sgVec4 dst, sgVec4 src )
+
+  void sgSubVec2  ( sgVec2 dst, sgVec2 src1, sgVec2 src2 )
+  void sgSubVec3  ( sgVec3 dst, sgVec3 src1, sgVec3 src2 )
+  void sgSubVec4  ( sgVec4 dst, sgVec4 src1, sgVec4 src2 )
+
+  void sgNegateVec2 ( sgVec2 dst )
+  void sgNegateVec3 ( sgVec3 dst )
+  void sgNegateVec4 ( sgVec4 dst )
+
+  void sgNegateVec2 ( sgVec2 dst, sgVec2 src )
+  void sgNegateVec3 ( sgVec3 dst, sgVec3 src )
+  void sgNegateVec4 ( sgVec4 dst, sgVec4 src )
+
+  void sgScaleVec2  ( sgVec2 dst, SGfloat s )
+  void sgScaleVec3  ( sgVec3 dst, SGfloat s )
+  void sgScaleVec4  ( sgVec4 dst, SGfloat s )
+
+  void sgScaleVec2  ( sgVec2 dst, sgVec2 src, SGfloat s )
+  void sgScaleVec3  ( sgVec3 dst, sgVec3 src, SGfloat s )
+  void sgScaleVec4  ( sgVec4 dst, sgVec4 src, SGfloat s )
+
+  void sgAddScaledVec2  ( sgVec2 dst, svVec2 src, SGfloat s )
+  void sgAddScaledVec3  ( sgVec3 dst, svVec3 src, SGfloat s )
+  void sgAddScaledVec4  ( sgVec4 dst, svVec4 src, SGfloat s )
+
+  void sgAddScaledVec2  ( sgVec2 dst, sgVec2 a, svVec2 b, SGfloat s )
+  void sgAddScaledVec3  ( sgVec3 dst, sgVec3 a, svVec3 b, SGfloat s )
+  void sgAddScaledVec4  ( sgVec4 dst, sgVec4 a, svVec4 b, SGfloat s )
+
+  int sgCompareVec2 ( sgVec2 a, sgVec2 b, SGfloat tol )
+  int sgCompareVec3 ( sgVec3 a, sgVec3 b, SGfloat tol )
+  int sgCompareVec4 ( sgVec4 a, sgVec4 b, SGfloat tol )
+
+  int sgEqualVec2   ( sgVec2 a, sgVec2 b )
+  int sgEqualVec3   ( sgVec3 a, sgVec3 b )
+  int sgEqualVec4   ( sgVec4 a, sgVec4 b )
+
+  SGfloat sgScalarProductVec2 ( sgVec2 a, sgVec2 b )
+  SGfloat sgScalarProductVec3 ( sgVec3 a, sgVec3 b )
+  SGfloat sgScalarProductVec4 ( sgVec4 a, sgVec4 b )
+
+  void sgVectorProductVec3 ( sgVec3 dst, sgVec3 a, sgVec3 b )
+
+  SGfloat sgLerp ( SGfloat a, SGfloat b, SGfloat f )
+
+  void sgLerpVec2 ( sgVec2 dst, sgVec2 a, sgVec2 b, SGfloat f )
+  void sgLerpVec3 ( sgVec3 dst, sgVec3 a, sgVec3 b, SGfloat f )
+  void sgLerpVec4 ( sgVec4 dst, sgVec4 a, sgVec4 b, SGfloat f )
+
+  SGfloat sgDistanceSquaredVec2 ( sgVec2 a, sgVec2 b )
+  SGfloat sgDistanceSquaredVec3 ( sgVec3 a, sgVec3 b )
+  SGfloat sgDistanceSquaredVec4 ( sgVec4 a, sgVec4 b )
+
+  SGfloat sgDistanceVec2 ( sgVec2 a, sgVec2 b )
+  SGfloat sgDistanceVec3 ( sgVec3 a, sgVec3 b )
+  SGfloat sgDistanceVec4 ( sgVec4 a, sgVec4 b )
+
+  SGfloat sgLengthVec2 ( sgVec2 src )
+  SGfloat sgLengthVec3 ( sgVec3 src )
+  SGfloat sgLengthVec4 ( sgVec4 src )
+
+  /* Anglo-US spelling issues.  &lt;sigh&gt; */
+
+  #define sgNormalizeVec2 sgNormaliseVec2
+  #define sgNormalizeVec3 sgNormaliseVec3
+  #define sgNormalizeVec4 sgNormaliseVec4
+
+  void sgNormaliseVec2 ( sgVec2 dst )
+  void sgNormaliseVec3 ( sgVec3 dst )
+  void sgNormaliseVec4 ( sgVec4 dst )
+
+  void sgNormaliseVec2 ( sgVec2 dst, sgVec2 src )
+  void sgNormaliseVec3 ( sgVec3 dst, sgVec3 src )
+  void sgNormaliseVec4 ( sgVec4 dst, sgVec4 src )
+
+</pre>
+<H3>Matrix Functions.</H3>
+The following functions let you construct an sgMat4 from a variety of
+input data formats:
+<pre>
+
+  void sgCopyMat4      ( sgMat4 dst, sgMat4 src ) ;
+
+  void sgMakeIdentMat4 ( sgMat4 dst ) ;
+
+  void sgMakeCoordMat4 ( sgMat4 dst, SGfloat x, SGfloat y, SGfloat z,
+                                     SGfloat h, SGfloat p, SGfloat r ) ;
+  void sgMakeCoordMat4 ( sgMat4 dst, sgVec3 xyz, sgVec3 hpr )
+  void sgMakeCoordMat4 ( sgMat4 dst, sgCoord *src )
+
+  void sgMakeRotMat4   ( sgMat4 dst, sgVec3 hpr )
+  void sgMakeRotMat4   ( sgMat4 dst, SGfloat h, SGfloat p, SGfloat r )
+  void sgMakeRotMat4   ( sgMat4 dst, SGfloat angle, sgVec3 axis ) ;
+
+  void sgMakeTransMat4 ( sgMat4 dst, sgVec3 xyz ) ;
+  void sgMakeTransMat4 ( sgMat4 dst, SGfloat x, SGfloat y, SGfloat z ) ;
+
+  void sgQuatToMatrix  ( sgMat4 dst, sgQuat quat ) ;
+
+
+</pre>
+You can multiply matrices:
+<pre>
+
+  void sgMultMat4      ( sgMat4 dst, sgMat4 a, sgMat4 b ) ;
+  void sgPostMultMat4  ( sgMat4 dst, sgMat4 a ) ;
+  void sgPreMultMat4   ( sgMat4 dst, sgMat4 a ) ;
+
+</pre>
+You can do a cheap matrix inversion (for simple rotate/translate
+matrices):
+<pre>
+
+  void sgTransposeNegateMat4 ( sgMat4 dst ) ;
+  void sgTransposeNegateMat4 ( sgMat4 dst, sgMat4 src ) ;
+
+</pre>
+...or a (more costly) full matrix inversion (for more complex matrices):
+<pre>
+
+  void sgInvertMat4 ( sgMat4 dst ) ;
+  void sgInvertMat4 ( sgMat4 dst, sgMat4 src ) ;
+
+</pre>
+You can transform vertices and points using a matrix. The 'Vec*' forms
+assume that the vector merely need to be rotated (like you would want
+for a surface normal for example) - whilst the 'Pnt*' forms perform
+a rotate and translate. If your matrix is more complex and contains
+scaling, shearing, perspective and such like, then use the 'FullXform'
+versions - which are quite a bit slower than the other forms:
+<pre>
+
+  void sgXformVec3     ( sgVec3 dst, sgMat4 mat ) ;
+  void sgXformVec3     ( sgVec3 dst, sgVec3 src, sgMat4 mat ) ;
+
+  void sgXformPnt3     ( sgVec3 dst, sgMat4 mat ) ;
+  void sgXformPnt3     ( sgVec3 dst, sgVec3 src, sgMat4 mat ) ;
+
+  void sgFullXformPnt3 ( sgVec3 dst, sgMat4 mat ) ;
+  void sgFullXformPnt3 ( sgVec3 dst, sgVec3 src, sgMat4 mat ) ;
+
+  void sgXformVec4     ( sgVec4 dst, sgMat4 mat ) ;
+  void sgXformVec4     ( sgVec4 dst, sgVec4 src, sgMat4 mat ) ;
+
+  void sgXformPnt4     ( sgVec4 dst, sgMat4 mat ) ;
+  void sgXformPnt4     ( sgVec4 dst, sgVec4 src, sgMat4 mat ) ;
+
+  void sgFullXformPnt4 ( sgVec4 dst, sgMat4 mat ) ;
+  void sgFullXformPnt4 ( sgVec4 dst, sgVec4 src, sgMat4 mat ) ;
+
+</pre>
+The properties of a matrix can be tested with:
+<pre>
+  int sgClassifyMat4 ( const sgMat4 mat ) ;
+</pre>
+which returns a bitmask with zero or more of the following bits set:
+<p>
+<table>
+  <tr>
+    <td>SG_ROTATION</td>
+    <td>Upper 3x3 includes a rotational component.</td>
+  </tr>
+  <tr>
+    <td>SG_MIRROR</td>
+    <td>Changes handedness.</td>
+  </tr>
+  <tr>
+    <td>SG_SCALE</td>
+    <td>Uniform scaling going on.</td>
+  </tr>
+  <tr>
+    <td>SG_NONORTHO</td>
+    <td>Upper 3x3 not orthogonal (including non-uniform scaling).</td>
+  </tr>
+  <tr>
+    <td>SG_TRANSLATION</td>
+    <td>Translates.</td>
+  </tr>
+  <tr>
+    <td>SG_PROJECTION</td>
+    <td>Fourth column not 0,0,0,1.</td>
+  </tr>
+</table>
+
+<H3>Coord routines:</H3>
+These routines operate on 'sgCoord' structures:
+<pre>
+
+  void sgZeroCoord ( sgCoord *dst ) ;
+  void sgSetCoord  ( sgCoord *dst, SGfloat x, SGfloat y, SGfloat z,
+                                   SGfloat h, SGfloat p, SGfloat r ) ;
+  void sgSetCoord  ( sgCoord *dst, sgVec3 xyz, sgVec3 hpr ) ;
+  void sgSetCoord  ( sgCoord *coord, sgMat4 src ) ;
+  void sgCopyCoord ( sgCoord *dst, sgCoord *src ) ;
+
+</pre>
+The varient of sgSetCoord that takes a matrix is somewhat tricky since
+there is no way to convert matrices that are not simple rotate/translates
+into sgCoord's - and even when the matrix is a simple rotate/translate,
+there are a number of possible sets of Euler rotations that could
+be appropriate to reproduce the behavior of the input matrix. sgSetCoord
+picks a valid rotation - but just beware of this behaviour.
+<H3>Quaternion routines:</H3>
+Quaternions are convenient alternatives to Matrices for storing
+rotations.
+<pre>
+  void sgMakeIdentQuat ( sgQuat dst ) ;
+</pre>
+Creates the identity quaternion. (0,0,0,1)
+<pre>
+  void sgSetQuat ( sgQuat dst, SGfloat w,
+                               SGfloat x,
+                               SGfloat y,
+                               SGfloat z ) ;
+</pre>
+Sets the four components of the quaternion.
+<pre>
+  void sgCopyQuat ( sgQuat dst, sgQuat src ) ;
+</pre>
+Copies one quaternion into another.
+<pre>
+  void sgNormalizeQuat ( sgQuat dst ) ;
+  void sgNormalizeQuat ( sgQuat dst, sgQuat src ) ;
+</pre>
+For most operations, quaternions need to be normalized,
+these functions ensure that they are.
+<pre>
+  void sgInvertQuat ( sgQuat dst ) ;
+  void sgInvertQuat ( sgQuat dst, sgQuat src ) ;
+</pre>
+Computes the inverse of a quaternion.
+<pre>
+  void sgQuatToAngleAxis ( SGfloat *angle, sgVec3 axis, const sgQuat src ) ;
+  void sgQuatToAngleAxis ( SGfloat *angle,
+                           SGfloat *x, SGfloat *y, SGfloat *z,
+                           const sgQuat src ) ;
+</pre>
+Converts a quaternion into an angle+axis format - just the thing
+to pass to glRotate for example.
+<pre>
+  void sgAngleAxisToQuat ( sgQuat dst, SGfloat angle, const sgVec3 axis ) ;
+  void sgAngleAxisToQuat ( sgQuat dst,
+                           SGfloat angle,
+                           SGfloat x, SGfloat y, SGfloat z ) ;
+</pre>
+Converts an angle+axis rotation into a quaternion.
+<pre>
+  void sgMultQuat     ( sgQuat dst, sgQuat a, sgQuat b ) ;
+  void sgPostMultQuat ( sgQuat dst, sgQuat q ) ;
+  void sgPreMultQuat  ( sgQuat dst, sgQuat q ) ;
+</pre>
+Concatenates quaternion rotations.
+<pre>
+  void sgQuatToMatrix ( sgMat4 mat, sgQuat quat ) ;
+  void sgMatrixToQuat ( sgQuat quat, sgMat4 mat ) ;
+</pre>
+Converts between quaternions and rotation matrices.
+<pre>
+  void sgPostRotQuat ( sgQuat dst, SGfloat angle, sgVec3 axis )
+  void sgPostRotQuat ( sgQuat dst, SGfloat angle,
+                       SGfloat x, SGfloat y, SGfloat z )
+  void sgPreRotQuat  ( sgQuat dst, SGfloat angle,
+                       SGfloat x, SGfloat y, SGfloat z )
+</pre>
+Rotates a quaternion by an angle/axis rotation.  
+<pre>
+extern void sgSlerpQuat ( sgQuat dst,
+                          const sgQuat from, const sgQuat to,
+                          const SGfloat t ) ;
+</pre>
+Interpolates between two quaternions.
+<H3>Miscellaneous Functions.</H3>
+<pre>
+  void sgHPRfromVec3 ( sgVec3 hpr, sgVec3 src ) ;
+</pre>
+This function takes a vector representing a direction and computes
+a suitable heading and pitch angle to look along that vector. Since
+the roll angle is indeterminate, it is set to zero.
+<pre>
+  void sgMakeNormal ( sgVec3 dst, sgVec3 a, sgVec3 b, sgVec3 c ) ;
+</pre>
+This finds the surface normal of a triangle given three vertices.
+<H3>Plane Equation Functions:</H3>
+<pre>
+  SGfloat sgDistToPlaneVec3 ( sgVec4 plane, sgVec3 pnt ) ;
+</pre>
+This returns the distance from the point to the plane.
+<pre>
+  SGfloat sgHeightAbovePlaneVec3 ( sgVec4 plane, sgVec3 pnt ) ;
+</pre>
+This returns the vertical (Z) distance from the point to the
+plane (my applications tend to use Z-is-up conventions).
+<pre>
+  void sgMakePlane ( sgVec4 dst, sgVec3 a, sgVec3 b, sgVec3 c ) ;
+</pre>
+This finds the plane equation of a triangle given three vertices.
+<pre>
+  void sgMakePlane ( sgVec4 dst, sgVec3 normal, sgVec3 pnt ) ;
+</pre>
+This finds the plane equation of a plane given its normal and
+a point on the plane.
+<H3>Intersection Calculations:</H3>
+These routines compute the intersections of various geometric
+entities:
+<pre>
+int sgIsectPlanePlane       ( sgVec3 point, sgVec3 dir,
+                              sgVec4 plane1, sgVec4 plane2 ) ;
+</pre>
+Two planes intersect along an infinite line. Given two planes,
+this routine routines a point and direction for the intersection
+line.  It returns FALSE if presented with two parallel planes,
+TRUE otherwise.
+<pre>
+int sgIsectInfLinePlane     ( sgVec3 dst,
+                              sgVec3 l_org, sgVec3 l_vec,
+                              sgVec4 plane ) ;
+</pre>
+Given a plane, and an infinite line,
+this routine routines the point at which they intersect.
+It returns FALSE if presented with a line which is parallel
+to the plane, TRUE otherwise.
+<pre>
+int sgIsectInfLineInfLine   ( sgVec3 dst,
+                              sgVec3 l1_org, sgVec3 l1_vec,
+                              sgVec3 l2_org, sgVec3 l2_vec ) ;
+</pre>
+Two infinite lines in 3D are unlikely to intersect - even
+if you actually expect them to (because of roundoff error).
+Hence, this routine sets dst to the closest point on the
+second line which is closest to the first line. Return
+FALSE if the lines are parallel, TRUE otherwise.
+<pre>
+SGfloat sgIsectLinesegPlane ( sgVec3 dst,
+                              sgVec3 v1, sgVec3 v2,
+                              sgVec4 plane ) ;
+</pre>
+Intersect a line segment with a plane. The return
+result is in the range 0..1 if the intersection lies
+between v1 and v2, >1 if beyond v2 and <0 if before v1.
+FLT_MAX is returned if the vector does not intersect
+the plane.
+<H3>Interconversion between sg and sgd types:</H3>
+The following routines interconvert between double precision
+'sgd' types and their single precision 'sg' counterparts:
+<pre>
+  void sgdSetVec2 ( sgdVec2 dst, sgVec2 src ) ;
+  void sgdSetVec3 ( sgdVec3 dst, sgVec3 src ) ;
+  void sgdSetVec4 ( sgdVec4 dst, sgVec4 src ) ;
+  void sgdSetMat4 ( sgdMat4 dst, sgMat4 src ) ;
+  void sgdSetCoord ( sgdCoord *dst, sgCoord *src ) ;
+
+  void sgSetVec2 ( sgVec2 dst, sgdVec2 src ) ;
+  void sgSetVec3 ( sgVec3 dst, sgdVec3 src ) ;
+  void sgSetVec4 ( sgVec4 dst, sgdVec4 src ) ;
+  void sgSetMat4 ( sgMat4 dst, sgdMat4 src ) ;
+  void sgSetCoord ( sgCoord *dst, sgdCoord *src ) ;
+</pre>
+<H3>Perlin Noise.</H3>
+There are three classes that implement Perlin Noise functions
+(in one, two and three dimensions).
+<pre>
+
+class sgPerlinNoise_1D
+{
+  sgPerlinNoise_1D () ;
+  void regenerate  () ;
+  SGfloat getNoise ( SGfloat x ) ;
+} ;
+ 
+class sgPerlinNoise_2D
+{
+  sgPerlinNoise_2D () ;
+  void regenerate  () ;
+  SGfloat getNoise ( sgVec2 pos ) ;
+  SGfloat getNoise ( SGfloat x, SGfloat y ) ;
+} ;
+ 
+class sgPerlinNoise_3D
+{
+  sgPerlinNoise_3D () ;
+  void regenerate  () ;
+  SGfloat getNoise ( sgVec3 pos ) ;
+  SGfloat getNoise ( SGfloat x, SGfloat y, SGfloat z ) ;
+} ;
+
+</pre>
+In each case, you simply construct the class, then call 'getNoise'
+with the coordinate (either one, two or three-dimensional) at which
+you need the value for the noise function.  Perlin noise is both
+repeatable (if you make the same request twice, you get the same
+result) and continuous (there are no large jumps between results
+for points that are close to one-another).
+<p>
+Calling 'regenerate' will cause the function to subsequently
+generate a different noise pattern (presuming you didn't re-seed
+the 'rand()' function to the same value before each call).
+<H3>Spring/Mass/Damper model.</H3>
+Many applications can greatly benefit from some simple dynamics
+modelling.  SG includes two classes that taken together implement
+a standard Spring-Mass-Damper model with Euler integration.
+<pre>
+
+  class sgParticle ;
+  class sgSpringDamper ;
+
+</pre>
+The idea is that you connect up a bunch of 'particles' (which each have
+mass, position and velocity) using a collection of springs (actually, these
+are combinations springs and dampers).  Then, each frame, you can apply
+forces to some or all of the particles - and perhaps forcably reposition
+some of them - then loop around updating all of the spring-damper models
+to see what forces they apply to the particles as a result. Finally, you
+should call the 'upadate' function for each particle to see where it ends
+up some short time later.
+<pre>
+
+class sgParticle
+{
+  sgParticle ( float mass ) ;
+  sgParticle ( float mass, float x, float y, float z ) ;
+  sgParticle ( float mass, sgVec3 position ) ;
+ 
+  float *getPos         () ;
+  float *getVel         () ;
+  float *getForce       () ;
+  float  getMass        () ;
+ 
+  void   setPos      ( sgVec3 p ) ;
+  void   setVel      ( sgVec3 v ) ;
+  void   setForce    ( sgVec3 f ) ;
+
+  void   setPos      ( float x, float y, float z ) ;
+  void   setVel      ( float x, float y, float z ) ;
+  void   setForce    ( float x, float y, float z ) ;
+
+  void   setMass     ( float  m ) ;
+ 
+  void zeroForce   ()           ;
+  void addForce    ( sgVec3 f ) ;
+  void gravityOnly ()           ;
+
+  void bounce ( sgVec3 normal, float coefRestitution ) ; 
+  void update ( float dt ) ;
+} ;
+
+</pre>
+Aside from the obvious set/get routines that allow you to set or get the
+particles mass, position, velocity and the total force that's applied to it,
+you can also zero the force (a usual thing to do at the start of each cycle)
+or set the force equal to normal gravity, or you can add a force to whatever
+is currently being applied.  The constructor function requires that you
+pass in the mass and (optionally) the initial position.  The mass of a
+particle cannot ever be zero because you'll get divide-by-zero errors
+all over the place if you do.
+<pre>
+
+class sgSpringDamper
+{
+  sgSpringDamper () ;
+  sgSpringDamper ( sgParticle *_p0, sgParticle *_p1,
+                   float _stiffness, float _damping,
+                   float _restLength = -1.0f ) ;
+ 
+  float       getRestLength () ;
+  float       getStiffness  () ;
+  float       getDamping    () ;
+  sgParticle *getParticle   ( int which ) ;
+ 
+  void setParticles ( sgParticle *_p0, sgParticle *_p1 ) ;
+  void setParticle  ( int which, sgParticle *p ) ;
+ 
+  void setRestLength () ;
+ 
+  void setRestLength ( float l ) ;
+  void setStiffness  ( float s ) ;
+  void setDamping    ( float d ) ;
+ 
+  void update () ;
+ 
+} ;
+
+</pre>
+Each spring/damper is connected to two sgParticle's.  It has a stiffness 
+and a damping factor plus a 'rest' length (ie how long it is when no
+forces are applied to the system).  If you omit the rest length, it will be
+calculated from the current positions of the two particles.
+<p>
+Apart from the usual set/get functions, there is a single 'update' routine
+which calculates the forces on the two particles and calls 'addForce' to
+each.
+<p>
+A typical application will look like this:
+<p>
+Initialisation:
+<ul>
+   <li> Construct all the sgParticle's
+   <li> Construct all the sgSpringDamper's and connect them to the particles.
+</ul>
+Initialisation:
+Each frame...
+<ul>
+   <li> For each particle: Set up all the EXTERNAL forces that apply to it:
+     <ul>
+     <li> <code>particle->zeroForce () ;</code>   ...or...
+     <li> <code>particle->gravityOnly () ;</code>   ...or...
+     <li> <code>particle->setForce ( something ) ;</code>
+     </ul>
+     Don't ever just allow the previous frame's forces to continue to be
+     applied.
+
+   <li> For each spring/damper add in the forces it applies to
+        the particles it's connected to: <code>spring -> update () ;</code>
+
+   <li> For each particle: Update it's velocity and position: <code>particle -> update ( dt )</code>
+      (where 'dt' is the elapsed time since the previous frame).
+   <li> If the particle collided with something, then you can adjust
+        it's velocity using:
+        <code>sgParticle::bounce ( sgVec3 normal, float coefRestitution )</code>
+        (Where 'normal' is the surface normal of the plane we hit and
+         'coefRestitution' is 1.0 for perfectly elastic surfaces, 0.0 for
+         ultra-sticky surfaces...or somewhere in between).
+</ul>
+As always with these systems, if you set the spring stiffness too high, or the
+damping coefficient too low, these equations will tend to <b>explode</b> - generating
+unreasonably large forces and velocities.  The only way to fix this is to back
+off the numbers - or call both sets of 'update' functions very frequently.
+<p>
+<b>You have been warned!</b>
+<p>
+By default, gravity is set to -9.8 meters/sec/sec in the Z direction - but this
+assumes you are on earth, using the metric (mks) system and have Z-is-up coordinates.
+<p>
+If any of those are not true, you can change the force that 'particle->gravityOnly()'
+applies using:
+<pre>
+
+  void   sgSetGravity     ( float  g ) ;
+  void   sgSetGravityVec3 ( sgVec3 g ) ;
+  float *sgGetGravityVec3 () ;
+  float  sgGetGravity     () ;
+
+</pre>
+Note that 'sgSetGravity' and 'sgGetGravity' use positive numbers for the
+accelleration due to gravity - and assume Z-is-up.  But the 'Vec3' versions
+make neither of those assumptions - so make sure the vector you give points
+DOWNWARDS!
+<p>
+eg
+<pre>
+
+    sgSetGravity ( 1.6 ) ;   /* On the Moon! */
+
+</pre>
+...but...
+<pre>
+
+    sgSetVec3 ( lunar_gravity, 0.0, 0.0, -1.6 ) ;   /* Note minus sign! */
+    sgSetGravityVec3 ( lunar_gravity ) ;
+
+</pre>
+<hr>
+<H2>Credits.</H2>
+Thanks to  <A HREF="mailto:kevinbthompson@yahoo.com">Kevin Thompson</A>
+who kindly donated the original Quaternion code.
+<hr>
+<table>
+<tr>
+<td>
+<a href="http://validator.w3.org/check/referer"><img border="0" src="../valid-html40.png" alt="Valid HTML 4.0!" height="31" width="88"></a>
+<td>
+<ADDRESS>
+<A HREF="http://www.sjbaker.org">
+Steve J. Baker.</A>
+&lt;<A HREF="mailto:sjbaker1@airmail.net">sjbaker1@airmail.net</A>&gt;  
+</ADDRESS>
+</table>
+</BODY>
+</HTML> 
+

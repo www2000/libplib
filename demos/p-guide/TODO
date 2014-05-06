@@ -1,0 +1,30 @@
+Planned Bug Fixes or Upgrades to P-GUIDE:
+
+Bug Fixes:
+
+1.  When the user has selected CTRL-widget, have the button value set back to zero when the selected_widget_type (or whatever it is) gets deselected or changed (eg when he presses on another widget button in the Widget window or presses another widget anywhere else), not just when he presses Escape.
+
+2.  Make the Active widget's black line go all the way around it.
+
+3.  puFileSelector needs options
+
+4.  puScrollBar needs to be added
+
+5.  Menus (Vert and normal) need a method to populate submenus.
+
+Upgrades:
+
+1.  Improve layer support. 
+
+2.  Make widgets added to window the real widgets, rather than Frames.
+
+3.  Multiple Window support
+
+4.  Makefile building?
+
+5.  Font viewing / selecting (a font browser and such)
+
+6.  Copy / Cut / Paste
+
+7.  Widget class changes
+

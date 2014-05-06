@@ -1,0 +1,886 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML>
+<HEAD>
+   <META http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+   <TITLE>SSG Auxiliary Libraries.</TITLE>
+</HEAD>
+<BODY text="#B5A642" link="#8FFF8F" vlink="#18A515" alink="#20336B"
+ bgcolor="#005000" background="../marble.png">
+
+<TABLE>
+<TR>
+<TD>
+<H1>SSG Auxiliary Libraries.</H1>
+</TD>
+</TR>
+<TR>
+<TD>
+               by Steve Baker
+</TD>
+</TR>
+</TABLE>
+<H2>Introduction</H2>
+<TABLE>
+<TR>
+<TD>
+PLIB/ssgAux is a suite of auxiliary libraries that build
+higher level classes on top of the basic SSG classes.
+<p>
+<ul>
+<li><A HREF="#ssgaShape">ssgaShape - Abstract Base Class</A>
+<li><A HREF="#ssgaCube">ssgaCube - Makes a cube.</A>
+<li><A HREF="#ssgaPatch">ssgaPatch - Makes a Bezier patch.</A>
+<li><A HREF="#ssgaTeapot">ssgaTeapot - Makes a Teapot.</A>
+<li><A HREF="#ssgaSphere">ssgaSphere - Makes a Sphere.</A>
+<li><A HREF="#ssgaCylinder">ssgaCylinder - Makes a Cylinder.</A>
+<li><A HREF="#ssgaWaveSystem">ssgaWaveSystem - Simulates Water Waves</A>
+<li><A HREF="#ssgaParticleSystem">ssgaParticleSystem - Implements a spray of particles</A>
+<li><A HREF="#ssgaFire">ssgaFire - Simulates Fire</A>
+<li><A HREF="#ssgaLensFlare">ssgaLensFlare - Simulates Lens Flare for drawing bright lights.</A>
+<li><A HREF="#ssgaSky">ssgaSky - Model a sky with sun, moon, clouds, stars & planets.</A>
+</ul>
+</TD>
+<TD>
+<center>
+<IMG SRC="snapshot.png" ALT="ssgAux screenshot" WIDTH=417 HEIGHT=309>
+<br>
+This image was created entirely from ssgAux primitives.
+</center>
+</TD>
+</TR>
+</TABLE>
+<p>
+<H2>Conventions</H2>
+ssgAux is installed and named with the same
+conventions as the base PLIB libraries.
+<br>
+ie:
+<pre>
+   /usr/include/plib/ssgAux.h
+   /usr/lib/libplibssgaux.a
+</pre>
+<p>
+PLIB/ssgAux functions, classes and constants are all
+named with an 'ssga' or 'SSGA' prefix.
+<br>
+eg:
+<pre>
+   class ssgaShape ;
+   SSGA_TYPE_CUBE
+</pre>
+<A NAME="ssgaShape"></A>
+<H1>ssgaShape</H1>
+This is an abstract base class for many of the more
+complex classes in the ssgAux 'collection'.  The idea
+is that ssgaShape's are really ssgBranch nodes that create
+their own child nodes - but they behave in such a way that
+you are never concerned with the nodes they create beneath
+themselves.
+<pre>
+
+class ssgaShape : public ssgBranch
+{
+  ssgaShape (void) ;
+  ssgaShape ( int numtris ) ;
+ 
+  float *getCenter  () { return center     ; }
+  float *getSize    () { return size       ; }
+  int    getNumTris () { return ntriangles ; }
+ 
+  void setColour  ( sgVec4 c ) { sgCopyVec4 ( colour, c ) ; regenerate () ; }
+  void setCenter  ( sgVec3 c ) { sgCopyVec3 ( center, c ) ; regenerate () ; }
+  void setSize    ( sgVec3 s ) { sgCopyVec3 ( size  , s ) ; regenerate () ; }
+  void setSize    ( float  s ) { sgSetVec3  ( size,s,s,s) ; regenerate () ; }
+  void setNumTris ( int ntri ) { ntriangles = ntri ; regenerate () ; }
+ 
+  void setKidState    ( ssgState *s ) ;
+  void setKidCallback ( int cb_type, ssgCallback cb ) ;
+ 
+  virtual void regenerate () = 0 ;                                              
+}
+</pre>
+The constructor allows you to specify the approximate number of
+triangles you'd like the shape to consume.  For some shapes, this
+will be ignored (eg the Cube has 12 triangles - no matter how many
+you ask for) - for others, it's honored only approximately (eg the
+Sphere can only generate certain specific numbers of triangles) -
+and for others, it may be honored exactly.
+<p>
+You can also set the colour of all the polygons and the ssgState and
+callbacks that are applied to all of the child nodes.
+<p>
+setCenter allows you to position the center point of the object in
+3D space - and setSize lets you determine the overall dimensions of
+the object (this too may also be approximate - the 'size' of a teapot
+is hard to specify in any useful way).  The version of 'setSize' that
+takes an sgVec3 allow you to generate cuboids from cubes and sphereoids
+from spheres...but not all shapes allow this.
+<p>
+The 'regenerate' call allows the complete child structure of the object
+to be deleted and then recreated.  This is occasionaly useful if (for
+example) you have walked down into the child structures and modified
+them - and you'd like the shape back into it's pristine conditions.
+<A NAME="ssgaCube"></A>
+<H1>ssgaCube</H1>
+<pre>
+
+class ssgaCube : public ssgaShape
+{
+  ssgaCube (void) ;
+  ssgaCube ( int numtris ) ;
+  virtual void regenerate () ;
+} ;
+ 
+</pre> 
+This is the simplest of ssgaShapes - it defines nothing new over
+and above the standard ssgaShape.
+<A NAME="ssgaPatch"></A>
+<H1>ssgaPatch</H1>
+<pre> 
+ 
+class ssgaPatch : public ssgaShape
+{
+  ssgaPatch (void) ;
+  ssgaPatch ( int numtris ) ;
+ 
+  void setControlPoint ( int s, int t, sgVec3 xyz, sgVec2 uv, sgVec4 rgba ) ;
+  void setControlPoint ( int s, int t,
+                         float x, float y, float z,
+                         float u, float v,
+                         float r, float g, float b, float a ) ;
+  void getControlPoint ( int s, int t, sgVec3 xyz, sgVec2 uv, sgVec4 rgba ) ;
+ 
+  virtual void regenerate () ;
+} ;
+ 
+</pre>
+This implements a basic spline patch - with a 4x4 grid of 'control points'
+that define its shape.  'setContolPoint' allows you to set the spatial
+position, the texture coordinate and the colour at any given (s,t) position.
+(s and t each must be in the range 0..3).
+<p>
+It's necessary to call the 'regenerate' function whenever you have added
+or changed one or more control points.
+ 
+<A NAME="ssgaTeapot"></A>
+<H1>ssgaTeapot </H1>
+<pre>
+ 
+class ssgaTeapot : public ssgaShape
+{
+  ssgaTeapot (void) ;
+  ssgaTeapot ( int numtris ) ;
+  virtual void regenerate () ;
+} ;
+ 
+</pre> 
+This creates the 'classic' Martin Newell teapot model.
+<A NAME="ssgaSphere"></A>
+<H1>ssgaSphere</H1>
+<pre>
+  
+class ssgaSphere : public ssgaShape
+{
+  ssgaSphere (void) ;
+  ssgaSphere ( int numtris ) ;
+ 
+  void setLatLongStyle ( int ll ) ;
+  int  isLatLongStyle  () ;
+  virtual void regenerate () ;
+} ;
+
+</pre>
+There are two ways to generate a sphere model - one is to produce a
+fairly uniform grid of triangles that are as nearly equilateral
+as possible.  The alternative is to generate more nearly right-triangles
+in cylindrical strips that are stacked on top of each other with a
+circular disk at top and bottom.
+<p>
+The function 'setLatLongStyle(ll)' allows you to choose which you want,
+call regenerate after you change types!
+<A NAME="ssgaCylinder"></A>
+<H1>ssgaCylinder</H1>
+<pre>
+ 
+class ssgaCylinder : public ssgaShape
+{
+  ssgaCylinder (void) ;
+  ssgaCylinder ( int numtris ) ;
+ 
+  void makeCapped ( int c ) ;
+  int  isCapped   () ;
+  virtual void regenerate () ;
+} ;                                                                             
+
+</pre>
+Cylinders also come in two forms - capped and uncapped.  Once again,
+if you change the capped versus uncapped status, call regenerate to
+make the new version.
+<A NAME="ssgaWaveSystem"></A>
+<H1>ssgaWaveSystem</H1>
+This class is for handling water waves.
+It generates a large polygonal mesh which it distorts in
+realtime to simulate water waves.
+<p>
+The simulation uses between one and sixteen "Wave Trains" - each
+using a class:
+<pre>
+
+class ssgaWaveTrain
+{
+  ssgaWaveTrain () ;
+ 
+  float getSpeed      () ;
+  float getLength     () ;
+  float getLambda     () ;
+  float getHeading    () ;
+  float getWaveHeight () ;
+
+  void  setSpeed      ( float s ) ;
+  void  setLength     ( float l ) ;
+  void  setLambda     ( float l ) ;
+  void  setHeading    ( float h ) ;
+  void  setWaveHeight ( float h ) ;
+} ;                                                                             
+
+</pre>
+So, you create a bunch of these trains (typically, two or three
+is plenty to generate 'interesting' motion).
+Each wave train has a direction in which the waves are travelling,
+a speed, a wave length (which also affects the shape of the wave),
+the height of the wave and a 'lambda' term (which controls how much
+the tops of the waves bend over).
+<p>
+Next, generate the ssgaWaveSystem:
+<pre>
+ 
+class ssgaWaveSystem : public ssgaShape
+{
+  ssgaWaveSystem ( int ntri ) ;
+ 
+  virtual void        regenerate  () ;
+ 
+  ssgaWSDepthCallback getDepthCallback () ;
+  void                setDepthCallback ( ssgaWSDepthCallback cb ) ;
+ 
+  ssgaWaveTrain *getWaveTrain ( int i ) ;
+  void           setWaveTrain ( int i, ssgaWaveTrain *t ) ;
+ 
+  float getWindSpeed   () ;
+  float getWindDirn    () ;
+  float getEdgeFlatten () ;
+  float getTexScaleU   () ;
+  float getTexScaleV   () ;
+ 
+  void  setWindSpeed   ( float speed      ) ;
+  void  setWindDirn    ( float dirn       ) ;
+  void  setEdgeFlatten ( float dist       ) ;
+  void  setTexScale    ( float u, float v ) ;
+ 
+  void updateAnimation ( float t ) ;
+} ;
+
+</pre>
+The appearance of waves varies greatly with the depth of the
+water - and this simulation produces the correct effects. There
+is an optional user-callback that can be used to feed water depth
+values into the simulation.  The wave system will likely call this
+function many thousands of times per frame - so make sure your
+depth function is very efficient.  If you don't provide a depth
+function then the water will be assumed to be infinitely deep.
+<p>
+You can determine the number of polygons used to render
+the patch of waves, the size of the wave patch and the amount
+of texture repetition.  The 'EdgeFlatten' setting determines
+to what distance from the edge of the patch the waves are
+gradually flattened out.  This is useful because it allows
+you to keep all those expensive wave polygons close to the
+camera - and feather them out over range so that they blend
+gently into a larger flat ocean.
+<p>
+Designing waves by calling the ssgaWaveSystem API is quite
+difficult.  You are advised to use the wave designer program
+in the PLIB examples package.  This program lets you adjust
+wave parameters until it looks how you'd like - then hit the
+'Write C++ code' to write out a source code snippet that you
+can cut and paste into your program.
+<p>
+There is a 'README' in the 'water' source directory that
+explains how to use the program in a little more detail.
+That's all the wave system documentation I have time to write
+just now - sorry.
+<A NAME="ssgaParticleSystem"></A>
+<H1>ssgaParticleSystem</H1>
+This is a very flexible implementation of particle systems - it's not
+as efficient as you might want for thousands of particles - this is intended
+for high flexibility and relatively fewer numbers of particles.
+
+<p>
+All of that flexibility is evident in the complex constructor function:
+<pre>
+
+  class ssgaParticleSystem : public ssgVtxArray
+  {
+    ssgaParticleSystem ( int max ,          /* Max Number of particles      */
+                         int init,          /* Number to launch initially   */
+                       float add ,          /* Max number to create per sec */
+                         int turn_to_face,  /* Turn to face camera?         */
+                       float size,          /* Size of particles            */
+                       float bsphere_rad,   /* Size of bounding sphere      */
+      ssgaParticleCreateFunc create,        /* Initial create fn.           */
+      ssgaParticleUpdateFunc update = NULL, /* Update function              */
+      ssgaParticleDeleteFunc del     = NULL /* Remove function              */
+                      ) ;
+
+    void  setSize ( float sz ) ;
+    float getSize () ;
+
+    update ( float dt ) ;
+
+    int getNumActiveParticles () ;
+  } ;
+
+</pre>
+There are three callback functions - with the following types:
+<pre>
+ 
+  typedef void (* ssgaParticleCreateFunc) ( ssgaParticleSystem *ps,
+					    int index,
+					    ssgaParticle *p ) ;
+ 
+  typedef void (* ssgaParticleUpdateFunc) ( float deltaTime,
+					    ssgaParticleSystem *ps,
+					    int index,
+					    ssgaParticle *p ) ;
+ 
+  typedef void (* ssgaParticleDeleteFunc) ( ssgaParticleSystem *ps,
+					    int index,
+					    ssgaParticle *p ) ;
+
+</pre>
+There is also a public class for a single particle:
+<pre>
+ 
+class ssgaParticle
+{
+public:
+ 
+  sgVec4 col ;
+  sgVec3 pos ;
+  sgVec3 vel ;
+  sgVec3 acc ;
+ 
+  float size ;
+  float time_to_live ;
+  void *userData ;
+ 
+  ssgaParticle () ;
+ 
+} ;                                                                             
+
+</pre>
+This is best explained with an example.
+Here is an example of a fountain model:
+<pre>
+
+  fountain = new ssgaParticleSystem ( 2000, /* Max Number of particles */
+                                         2, /* Number to launch initially */
+                                       200, /* Max number to create per sec */
+                                      TRUE, /* Turn to face? */
+                                       0.2, /* Size of particles */
+                                      20.0, /* Size of bounding sphere */
+                           fountain_create, /* Initial create fn. */
+                           fountain_update  /* Update function */ ) ;
+ 
+</pre>
+This creates a system that has the capability to draw 2000 particles
+(each is a quadrilateral).  Two particles are launched initially and 200
+more are added gradually every second.  You can choose to have each particle
+turn to face the camera - or to be oriented in the X/Z plane, mine are set to
+turn-to-face.  The particles are 0.2 OpenGL units across.
+<p> 
+This fountain is a continuous effect - so the inital number of particles
+to launch is small - and the 'per second' creation rate determines the
+flow.  If you wanted something more like an explosion, have a larger number
+of initial particles and none launched per-second after that.
+<p>
+One messiness is that we don't know how big the fountain may become over
+time - and it's VERY inefficient to recompute the bsphere every frame. Hence
+you have to tell the class what the maximum bounding sphere of the fountain
+is at the outset so we can field-of-view cull it - this <b>could</b> be a near
+infinite radius (MAX_FLOAT say) if you truly don't know how big it could
+get - but that's inefficient because all 2,000 particles must be sent to
+OpenGL even if the fountain is 20 miles away behind the camera - so do your
+best to come up with some kind of a reasonable guess.
+<p>
+fountain_create and fountain_update are user-defined callback functions,
+we could also have defined a 'fountain_delete' function - but many applications
+won't need this.
+<ul>
+<li>The 'create' callback is called every time the system needs to
+    create a new particle.
+<li>The 'update' callback is called on every update cycle for every
+    particle that's in flight.
+<li>The 'delete' callback is called when the system has decided
+    that a particle has 'died'.
+</ul>
+You have to have a 'create' function - but the other two are optional.
+<p>
+These callbacks are passed the address of the particle system, the index
+number and address of the particle that's being created/updated/deleted -
+and (for the 'update' function only) - the amount of elapsed time since
+this particle was last updated.
+<p>
+The callbacks can set, read or change any or all aspects of the particle...
+it's colour, position, velocity, accelleration, size and 'time to live'
+(in seconds).
+There is also a user data pointer - so you can hang your own data onto
+each individual particle.
+<p>
+The particle system automatically moves each particle according to the usual
+laws of motion and decrements it's time-to-live - so in many cases,
+you can just set the initial velocity, the force due to
+gravity and a reasonable time to live - and let the particle system code
+do the rest.
+<p>
+My 'fountain_create' function looks like this:
+<pre>
+
+void fountain_create ( ssgaParticleSystem *, int, ssgaParticle *p )
+{
+  sgSetVec4 ( p -&gt; col, 1, 1, 1, 1 ) ;  /* initially white */
+  sgSetVec3 ( p -&gt; pos, 0, 0, 0 ) ;     /* start off on the ground */
+  sgSetVec3 ( p -&gt; vel, (rand()%1000-500)/300.0f,
+                        (rand()%1000-500)/300.0f, 50.0f ) ;
+                                        /* Shoot up and out */
+  sgSetVec3 ( p -&gt; acc, 0, 0, -9.8f ) ; /* Gravity */
+  p -&gt; time_to_live = 5 ;               /* Droplets evaporate after 5 seconds */
+}
+
+</pre>
+It populates the particle with an initial colour, position, velocity and
+accelleration and gives it a 'time to live' of five seconds.  The velocity
+is randomised a bit to make a nicer looking fountain.
+<p>
+You can do all sorts of fancy things to the colour, position, velocity and
+accelleration in your 'update' function.
+<pre>
+
+void fountain_update ( ssgaParticle *p )
+{
+  if ( p -&gt; pos [ 2 ] &lt; 0 )
+    p -&gt; time_to_live = -1 ;
+ 
+  p -&gt; col [ 2 ] = (p -&gt; time_to_live &gt; 2) ? 1 : (p -&gt; time_to_live/2.0f) ;
+}
+
+</pre>
+...this one just erases particles that go below zero altitude (by
+setting their time-to-live variable to -1) and makes them go a pretty
+shade of yellow for the last two seconds before they die.
+<p>
+The 'delete' function is principally useful for freeing up any user-data
+you allocated in the 'create' function or during 'update's.  Don't
+delete the particle though - the particle system recycles it to avoid
+doing too much dynamic memory allocation.
+<p>
+All that remains is to call the ssgaParticleSystem::update function
+every frame with a parameter that tells the system how much time has
+elapsed since the last call.  This allows you to easily speed up, slow
+down or pause the particles (or even run them backwards if you want).
+<p>
+I call this every frame:
+<pre>
+
+void updateFountain ()
+{
+  static ulClock ck ;
+
+  ck . update () ;
+ 
+  if ( fountain != NULL )
+    fountain -&gt; update ( ck.getDeltaTime () ) ;
+}
+                                                                                
+</pre>
+This function could also check the number of particles currently in flight
+and delete the fountain when there are none left - that might be useful
+for an explosion or something where you'd want to save CPU time by not
+running the explosion particle system when all the pieces have landed
+and 'gone away'.
+<p>
+The size of each particle is the size field of the individual particle
+MULTIPLIED by the number you pass into the size parameter of the
+ssgaParticleSystem constructor (or set with setSize()).  This allows you
+to cheaply set the particle size for all the particles at once - or to
+tweak the size of each one in turn.  The number in the particle structure
+defaults to 1.0 so you can ignore it and just set the size in the
+particle system overall.
+<p>
+ssgaParticleSystem is derived from ssgVtxArray - so you can apply textures and
+other state things using the usual ssgVtxArray::setState(ssgSimpleState*)
+call.  I applied a texture with a fuzzy alpha-blended circle.
+<p>
+While debugging this, I got a bug which caused a picture of Tux to be
+applied instead of the droplet texture - it was absolutely hilarious
+to see 2000 tiny penguins shooting up in a fountain and falling gently
+to earth!
+<A NAME="ssgaFire"></A>
+<H1>ssgaFire</H1>
+This class is actually a highly specialised particle system.
+You have to construct it quite carefully in order to get a nice
+looking fire:
+<pre>
+
+  class ssgaFire : public ssgaParticleSystem
+  {
+    ssgaFire ( int num_tris,
+               float radius = 1.0f,
+               float height = 5.0f,
+               float speed  = 2.0f ) ;
+ 
+    virtual ~ssgaFire () ;
+ 
+    virtual void update ( float t ) ;
+ 
+    void setUpwardSpeed ( float spd )
+    void setHeight      ( float hgt )
+    void setRadius      ( float rad )
+    void setHotColour   ( sgVec4 col )
+  } ;
+
+</pre>
+In the constructor, you set the number of triangles you wish to
+generate, the radius and height of the approximately cylindrical
+fire and the speed at which the flames head up towards the sky.
+<p>
+The number of polygons you use tends to be rather critical - too
+many and your fire will look too 'smooth' and will be mostly
+white-hot.  Too few and it'll look like a number of detached
+reddish blobs floating upwards.  For the default radius, between
+100 and 200 triangles seems to look good - for a 10 meter patch
+of fire, you may need as many as 2000 triangles to make it look
+effective.  All three parameters (speed, height and radius) can
+be manipulated in realtime - but since the number of polygons
+is fixed, there is a limit to the amount of realtime tweaking
+you can do without making it look silly.
+<p>
+The 'setHotColour' function allows you to set the colour
+of the hottest flames (at the base of the fire).  Since many
+layers of polygons add up to form the colour, you'll tend to
+want to use a primary colour with about 10% of one or two of
+the other primaries.  The default colour is (1.0, 0.2, 0.1, 1.0)
+which produces red flames with yellow and white in the hotter
+regions.
+<p>
+<A NAME="ssgaLensFlare"></A>
+<H1>ssgaLensFlare</H1>
+When you view the sun (or some other very bright light source) through
+the imperfect lens of a camera, you get a row of bright circles and
+rings in a line from the light source, through the center of the lens.
+This is called a 'lens flare' and it can be very effective in computer
+graphics in depicting a light source that's brighter than the computer
+screen can display.  It almost makes you want to squint because of
+the brightness.
+<p>
+The ssgaLensFlare object is a special kind of ssgaShape that can be
+positioned beneath the same transform
+as the source of the light - and it 'just works'.  You don't need
+to set any parameters - just add it into the SSG scene graph in the
+right place.
+<p>
+eg:
+<pre>
+
+   ssgTransform *myTransform ;
+   ssgBranch    *myLightSource ;
+
+   /* Set up myTransform and myLightsource */
+
+   ...
+
+   myTransform -&gt; addKid ( myLightSource ) ;
+   myTransform -&gt; addKid ( new ssgaLensFlare ) ;
+
+</pre>
+It contains a (hard-coded) 256x128 texture map which is compiled
+into the code and shared between however many lens flares there
+are in the scene.
+<p>
+<A NAME="ssgaSky"></A>
+<H1>ssgaSky</H1>
+<TABLE>
+<TR>
+<TD width="40%" valign="top">
+The ssgaSky class models a blended sky dome, with methods to add celestial
+bodies, for example a haloed sun or a textured moon, and methods to add
+clouds, stars and planets.
+<p>
+<b>WARNING</b> - Solaris C/C++ compilers (from Sun Microsystems Inc) have
+some nasty '#define's for the word 'SUN' and 'sun'.  If you are writing
+portable software, you might want to pick an alternative word!  PLIB uses 'Sol',
+the formal astronomical name for the star that happens to be our sun.
+<p>
+The sky implements various time of day lighting effects, it plays well
+with fog and visibility effects, and implements scudded cloud fly-through
+effects. Additionally, you can wire in the output of the SimGear
+<a href="http://www.simgear.org/doxygen/classSGEphemeris.html">SGEphemeris</a>
+class to accurately position all the objects in the sky.
+<p>
+This sky dome code was based on the <a href="http://www.simgear.org/">SimGear</a>
+sky code, written by Curtis Olson, which is used in
+<a href="http://www.flightgear.org/">FlightGear</a>.
+The code was moved into PLIB for easier access, STL was removed and 'flat
+earth' methods added. The main reason the code was moved here was to allow
+the PLIB community to add their own extensions (not relevant to FlightGear),
+to build for example, 'un-realistic' sky domes, with green skies, purple
+clouds or multiple suns. This has not yet fully been achieved, but hopefully
+when someone finds the time or has the need, these features will be added.
+</TD>
+<TD>
+<center>
+<IMG SRC="ssgaSky.png" ALT="ssgaSky screenshots" WIDTH=400 HEIGHT=300>
+<br>
+ssgaSky screenshots
+</center>
+</TD>
+</TR>
+</TABLE>
+<pre>
+class ssgaSky
+{
+public:
+
+  ssgaSky( void );
+  ~ssgaSky( void );
+
+  void build( double h_radius, double v_radius,
+	  int nplanets, sgdVec3 *planet_data,
+	  int nstars, sgdVec3 *star_data);
+
+  ssgaCelestialBody* addBody( const char *body_tex_path, const char *halo_tex_path, double size, double dist, bool sol = false );
+  ssgaCelestialBody* addBody( ssgSimpleState *orb_state, ssgSimpleState *halo_state, double size, double dist, bool sol = false );
+  ssgaCelestialBody* getBody(int i) { return bodies.get(i); }
+  int getBodyCount() { return bodies.getNum(); }
+
+  ssgaCloudLayer* addCloud( const char *cloud_tex_path, float span, float elevation, float thickness, float transition );
+  ssgaCloudLayer* addCloud( ssgSimpleState *cloud_state, float span, float elevation, float thickness, float transition );
+  ssgaCloudLayer* getCloud(int i) { return clouds.get(i); }
+  int getCloudCount() { return clouds.getNum(); }
+
+  bool repositionFlat( sgVec3 view_pos, double spin, double dt );
+  bool reposition( sgVec3 view_pos, sgVec3 zero_elev, sgVec3 view_up,
+                   double lon, double lat, double alt, double spin, double gst, double dt );
+
+  bool repaint( sgVec4 sky_color, sgVec4 fog_color, sgVec4 cloud_color, double sol_angle,
+	  int nplanets, sgdVec3 *planet_data,
+	  int nstars, sgdVec3 *star_data );
+
+  void modifyVisibility( float alt, float time_factor );
+
+  void preDraw();
+  void postDraw( float alt );
+
+  void enable();
+  void disable();
+
+  float getVisibility();
+  void setVisibility( float v );
+} ;
+</pre>
+<H2>Building the sky</H2>
+Once you have created an instance of ssgaSky you must call the
+build() method. The arguments you pass to the build() method
+allow you to specify the size of your sky dome, a number of planets,
+and a multitude of stars. For the planets and stars you pass in
+an array of right ascensions, declinations, magnitudes, and the
+distance from the view point. 
+<H2>Celestial Bodies</H2>
+Celestial bodies (eg. sun, moon or even mars if you like) can be
+added or modified individually. To add a body use the addBody()
+method. The arguments allow you to specify the body texture, the
+halo texture, the size of the body, the body distance (usually the
+sky dome size) and a boolean flag to indicate if the body should
+be used as a reference to 'spin' the dome based on the bodies rotation
+for correct sunrise and sunset effects (nb. the sun reference is only used
+by repositionFlat() so the user does not need to calculate the spin
+parameter). There is an additional form of this method that allows
+you to specify your own ssgSimpleState for drawing the body and halo
+texture.
+<p>
+Body accessor methods are available to:
+<ul>
+<li> set body right ascension and declination
+<li> get body position and color
+</ul>
+note: body angle and rotation are calculated internally (by
+ssgaSky::repositionFlat() only) for sunrise and sunset effects.
+<pre>
+class ssgaCelestialBody
+{
+...
+  void getPosition ( sgCoord* p );
+
+  void setAngle ( double angle );
+  double getAngle ();
+
+  void setRotation ( double rotation );
+  double getRotation ();
+
+  void setRightAscension ( double ra );
+  double getRightAscension ();
+
+  void setDeclination ( double decl );
+  double getDeclination ();
+
+  void setDist ( double dist );
+  double getDist ();
+
+  float *getColor();
+} ;
+</pre>
+<H2>Cloud Layers</H2>
+Cloud layers can be added or modified individually. To add a cloud
+layer use the addCloud() method. The arguments allow you to specify
+cloud texture, the size of the cloud object, base height above sea
+level, layer thickness and a transition zone for entering/leaving
+the cloud layer. There is an additional form of this method that
+allows you to specify your own ssgSimpleState for drawing the cloud
+layer texture.
+<p>
+Cloud accessor methods are available to:
+<ul>
+<li> enable/disable clouds
+<li> set elevation above sea level
+<li> set thickness and transition - used to simulate cloud 'puffs'
+<li> set speed and direction - used to simulate cloud movement
+</ul>
+<pre>
+class ssgaCloudLayer
+{
+...
+  void enable();
+  void disable();
+  bool isEnabled();
+
+  float getElevation ();
+  void  setElevation ( float elevation );
+
+  float getThickness ();
+  void  setThickness ( float thickness );
+
+  float getTransition ();
+  void  setTransition ( float transition );
+
+  float getSpeed ();
+  void  setSpeed ( float val );
+
+  float getDirection ();
+  void  setDirection ( float val );
+} ;
+</pre>
+<H2>Repainting the Sky</H2>
+As the sun circles the globe, you can call the repaint() method to
+re-color the sky objects to simulate sunrise and sunset effects,
+visibility, and other lighting changes. The arguments allow you
+to specify a base sky color (for the top of the dome), a fog color
+(for the horizon), a cloud color (for blending clouds with the fog
+color), the sun angle with the horizon (for sunrise/sunset effects),
+and new star and planet data so that we can optionally change the
+magnitude of these (for day/night transitions).
+<H2>Positioning Sky Objects</H2>
+As time progresses and as you move across the surface of the earth,
+the apparent position of the objects and the various lighting effects
+can change. At this point you may wish to call celestial body
+setRightAscension() and setDeclination() methods to update the
+position of your bodies (SimGear
+<a href="http://www.simgear.org/doxygen/classSGEphemeris.html">SGEphemeris</a>
+can be used if you wish to place bodies correctly).
+<p>
+Once you have specified the positions of all the sky objects, you must
+call the repositionFlat() or reposition() method to allow you to specify
+your view position.
+<p>
+The repositionFlat() arguments allow you to specify view position for
+a 'flat earth' model. A 'spin' angle can be specified for orienting
+the sky with the sun position so sunset and sunrise effects look correct.
+If you specified a body to be the sun reference on addBody() you do not
+need to specify the 'spin' angle. You may specify the amount of elapsed
+time since the sky was last updated (used to animate cloud movement).
+<p>
+The reposition() arguments allow you to specify your view position in
+world Cartesian coordinates, the zero elevation position in world
+Cartesian coordinates (your longitude, your latitude, sea level),
+the 'up' vector in world Cartesian coordinates, current longitude,
+latitude, and altitude. A 'spin' angle can be specified for
+orienting the sky with the sun position so sunset and sunrise
+effects look correct. You must specify GMT side real time. You may
+specify the amount of elapsed time since the sky was last updated
+(used to animate cloud movement).
+<H2>Rendering the Sky</H2>
+The sky is designed to be rendered in two stages. The first stage
+renders the parts that form your back drop - the sky dome, the
+stars, the planets and the celestial bodies. These should be
+rendered before the rest of your scene by calling the preDraw()
+method. The second stage renders the clouds which are likely to be
+translucent and should be drawn after your scene has been rendered.
+Use the postDraw() method to draw the second stage of the sky. 
+<p>
+A typical application might do the following: 
+<pre>
+thesky->preDraw(); 
+ssgCullAndDraw ( myscene ) ; 
+thesky->postDraw( my_altitude ); 
+</pre>
+The current altitude in meters is passed to the postDraw()
+method so the clouds layers can be rendered correctly from
+most distant to closest. 
+<H2>Visibility Effects</H2>
+Visibility and fog is important for correctly rendering the sky.
+You can inform ssgaSky of the current visibility by calling
+the setVisibility() method.
+<p>
+When transitioning through clouds, it is nice to pull in the
+fog as you get close to the cloud layer to hide the fact that
+the clouds are drawn as a flat polygon. As you get nearer to
+the cloud layer it is also nice to temporarily pull in the
+visibility to simulate the effects of flying in and out of
+the puffy edge of the cloud. These effects can all be
+accomplished by calling the modifyVisibility() method. The
+arguments allow you to specify your current altitude
+(which is then compared to the altitudes of the various
+cloud layers). You can also specify a time factor which
+should be the length in seconds since the last time you
+called modifyVisibility(). The time_factor value allows the
+puffy cloud effect to be calculated correctly.
+<p>
+The modifyVisibility() method alters the ssgaSky's internal
+idea of visibility, so you should subsequently call
+getVisibility() to get the actual modified visibility.
+You should then make the appropriate glFog() calls to
+setup fog properly for your scene.
+<H2>Accessor Methods</H2>
+Once an instance of ssgaSky has been successfully
+initialized, there are a couple accessor methods you
+can use such as getBodyCount() to return the number
+of celestial bodies, getBody(i) to return body number
+i, getCloudCount() to return the number
+of cloud layers, getCloud(i) to return cloud
+layer number i, getVisibility() to return the actual
+visibility as modified by the sky/cloud model.
+<p>
+<hr>
+<table>
+<tr>
+<td>
+<a href="http://validator.w3.org/check/referer"><img border="0" src="../valid-html40.png" alt="Valid HTML 4.0!" height="31" width="88"></a>
+<td>
+<ADDRESS>
+<A HREF="http://www.sjbaker.org">
+Steve J. Baker.</A>
+&lt;<A HREF="mailto:sjbaker1@airmail.net">sjbaker1@airmail.net</A>&gt;  
+</ADDRESS>
+</table>
+</BODY>
+</HTML> 
+

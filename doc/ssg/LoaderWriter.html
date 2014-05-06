@@ -1,0 +1,315 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML>
+<HEAD>
+   <META http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+   <TITLE>A Simple Scene Graph API for OpenGL.</TITLE>
+</HEAD>
+<BODY text="#B5A642" link="#8FFF8F" vlink="#18A515" alink="#20336B"
+ bgcolor="#005000" background="../marble.png">
+
+<H2>How to write plib-loaders and writers</H2>
+
+<H2>1.1 Introduction</H2>
+
+This page is intended for those who wish to write loaders and writers
+for plib. If you just use plib (using the included loaders and writers), you don't 
+really need to read this.
+
+It is quite easy to adapt 3D-file-loaders and writers to be used by ssg. Plib
+already has many loaders and writers that may be used as examples.<p>
+
+A brief note on cross platform compilation: Plib comes with 
+both Makefiles (for Unix and for the CygWin-system under Windows)
+and workspace/project-files for Micro$oft Visual C++. If you 
+have both, please update, test and commit both.
+Otherwise, when committing, please tell the people that something is
+missing (for example: you didn't update the workspace files) and that some 
+kind soul should do so.
+<p>
+
+Both loaders and writers convert between ssg's internal geometry 
+representation and that of the file format. One key difference is that when 
+loading, you should support all possibile 
+geometry-representations of the file format. This is to ensure that
+plib can handle all the possible variations of a file format that may be generated
+by the tools that export to it. On the other hand, when writing a format, you can 
+pretty safely only write to one geometry format (unless you need features peculiar 
+to more than one geometry representation), because you have the final say on how the 
+data is to be written. 
+<p>
+
+Regarding plib's geometry-representations: there are only two on the highest
+level: <code>ssgVtxTable</code> and <code>ssgVtxArray</code>. Actually, there is also 
+ssgVTable, but that is deprecated.
+
+<code>ssgVtxArray</code> is newer, is derived
+from ssgVtxTable and uses a index-list. Apart from that they are quite
+similar, and both have an interface <code>getNumTriangles () ; </code> and
+<code>getTriangle ( i, ...); </code>
+For this reasons, it is easier to write a writer than a loader.
+
+
+For both ssgVtxTable and ssgVtxArray you need to choose a
+GL-type. Currently ssgLoaderWriterMesh (more on this in the
+next section) uses <code>GL_TRIANGLES</code>.
+
+
+<H2>1.2 class ssgLoaderWriterMesh - an overview</H2>
+
+The two main parts of writing a loader are writing the actual parser (coding 
+the syntax of the format) and transferring the contents
+to ssg. The second task is fairly trivial if your contents
+obey the restrictions of ssg (which follow from OpenGL).
+<BR><BR>
+These are:
+<BR><BR>
+
+1. Each ssg-node can (currently) have only one texture.
+<BR>
+2. Only one polygon or strip or fan per node. So you can't have a 3-, a 4- and a 5-sided
+poly inside one node (without subdividing the polys into triangles)
+<BR>
+3. Currently, you may have only one texture coordinate per vertex.
+<BR>
+4. You may have only one normal per vertex.
+<BR><BR>
+To modularize the two steps parsing the format and transfering it to ssg
+and to reduce redundant work, there is an intermediatory structure, the class
+ssgLoaderWriterMesh. For example, this has a member function
+<pre>
+void ssgLoaderWriterMesh::addFaceFromIntegerArray( int numVertices, int *vertices );
+</pre>
+With several calls, you can add several n-sided polys to one mesh ("one node").
+When you are done constructing the mesh from the file, you call
+<pre>
+void ssgLoaderWriterMesh::addToSSG(
+		class ssgSimpleState *currentState,
+		class ssgLoaderOptions* current_options,
+		class ssgBranch *curr_branch_)
+</pre>
+and the class adds the information into the scene graph. It handles
+ssgs' restrictions. For example, if the polygons of the mesh use 
+5 textures then at least 5 nodes will be added to the scene graph.<p>
+
+Unfortunately, this class isn't completely finished. As of this
+writing, Wolfram Kuss (w_kuss@rz-online.de) has implemented those
+parts that were needed for the loaders he has finished thus far. Hopefully 
+people will contribute more features as time goes on.<p>
+
+If you are writing a new loader for a file format that doesn't hold to
+all restrictions of ssg (and virtually none do), you are urged to use this class. 
+Your loader will be more consistent and easier to maintain and read.<p>
+
+Further, there are many optimizations that can be done (For example: "If the state is 
+different, but not the texture, do we need several nodes?" or "When we have multitexturing, 
+can we use that?" or "Is there an optimal strip length?" or "How do I subdivide polys into 
+triangles so that the stripifier will work well?"-- the list goes on
+forever). Once we have good answers to these questions (and the will
+to implement them), it will be easier to do them once in the ssgLoaderWriterMesh than in all the 
+loaders seperately. It is noteable that most loaders written before
+ssgLoaderWriterMesh have had some sort of intermediatory mesh
+structure.<p>
+
+In the future, ssgLoaderWriterMesh should also be used for writers, doing the opposite 
+job: It takes the information from ssg with the restrictions and then looks whether
+it can optimize (for example merging nodes) by relaxing the restrictions.
+
+<H2>1.3 The Class ssgLoaderWriterMesh - A Deeper Look</H2>
+At the start of your loader, you create a new <code>ssgLoaderWriterMesh</code>
+or do a <code>reInit()</code>. To insert the data into the <code>ssgLoaderWriterMesh</code>,
+you have to add vertices, faces, materials, materialindexes (saying what face uses what material)
+and, if applicable texture coordinates. For all of these, you <B>can</B> say in advance how many you have.
+If you know that you have 3712 vertices, call <code>createVertices(3712)</code> and everything is allocated
+at once and <code>addVertex</code> will be very fast. If you don't know in advance how many you have, you 
+still have to call <code>createVertices()</code>, as this also allocates the vertices. In this case, a 
+certain amount of vertices will be reserved and the list will dynamically grow as more are added.<p>
+
+Vertices are simply sgVec3s. Faces are simply lists/arrays of vertex indexes.
+For adding faces, use <code>addFace</code> if you already have a <code>ssgIndexArray</code> or use
+<code>addFaceFromIntegerArray</code> if you have the vertex indexes in a C(++) array.
+You need to add at least one material (<code>ssgSimpleState</code>). For each face, you tell
+ssg which material to use via <code>addMaterialIndex</code>. Here is code from ssgLoadOFF, which tells
+ssg to use the <code>ssgSimpleState</code> ss for all faces:
+
+<BR>
+<pre>
+
+	theMesh.createMaterials( 1 );
+	theMesh.addMaterial( &amp;ss );
+	theMesh.createMaterialIndices( _ssgNoFacesToRead ) ;
+	for(i=0;i<_ssgNoFacesToRead ;i++)
+	   theMesh.addMaterialIndex ( 0 ) ;
+</pre>
+<BR>
+If the file format has texture coordinates, you have to find out whether it has them 
+per vertex or per vertex and face. If you look at a "straight forward" cube,
+having texture coordinates per vertex means you can have 8, but if you have
+texture coordinates per vertex and face, you can have 24 (each vertex is part of 3 faces).
+The two functions corresponding to these cases are:
+<pre>
+       void createPerFaceAndVertexTextureCoordinates2( int numReservedTextureCoordinate2Lists = 3 );
+       void addPerFaceAndVertexTextureCoordinate2( ssgTexCoordArray **textureCoordinateArray ); 
+</pre>
+or
+<pre>
+        void createPerVertexTextureCoordinates2( int numReservedTextureCoordinates2 = 3 ); 
+        void addPerVertexTextureCoordinate2( sgVec2 textureCoordinate ); 
+</pre>
+
+
+<H2>2. Loaders</H2>
+
+
+<H2>2.1 class ssgLoaderOptions</H2>
+
+ssgLoaderOptions is a class that is defined in ssg.h.
+It is used to tell the loader some options.
+It is NOT used for user-setable options, although
+this may be nice to have at some point. For example, 
+one COULD create a member-variable in it
+telling the unit that one wants. The loader would then 
+be responsible to scale the object in such a way that
+the sizes are in that unit (for example: meter, millimeter, etc).
+
+<BR>
+<BR>
+Regarding the reason for the callbacks in ssgLoaderOptions, Steve
+wrote:
+<BR>
+<BR>
+<blockquote>
+<i>"Whenever a branch node is created.  The deal is that most file formats
+are
+missing important features at the Branch level - but many support
+comment
+fields - or long ASCII name strings or something. The idea was to allow the artists to attach an ARBITARY comment string
+in their modeller - and to have the loader trap these strings and pass
+them on to the application.</i><p>
+
+<i>Hence, if the hook function is defined then when a branch node needs
+to
+be created, we call the application's callback with the ASCII string
+that was embedded in the file and let the application construct the
+ssgBranch
+node.  Hence, you could put the string "~LOD: RANGE=100 meters"
+into the comment field in (say) the AC3D modeller.  (AC3D calls this a
+"Data"
+field)...the application could then say to itself: "Any comment that
+starts
+with a tilde ('~') is a command to the loader" and parse such
+'comments'
+as commands.  In this case, it would construct an ssgRangeSelector and
+set
+the transition range to 100m and return the application back to the
+loader.</i><p>
+
+<i>Check the <a href="http://tuxkart.sf.net">Tux Kart</a> sources to see this in action."</i>
+</blockquote>
+
+So much for the quote from Steve.
+<p>
+
+As of this writing, the ssgLoaderOptions code has been copied from 
+another loader into ssgLoaderWriterMesh.
+
+
+<H2>2.2 ASCII file formats</H2>
+A lexical analyzer for ascii-files is available in ssgParser.cxx and 
+ssgParser.h. It converts the file into a stream of tokens and 
+handles comments. In a way, it has two APIs.
+One hides the line structure from the loader. The loader just has 
+to say "getNextToken".
+The other API operates in terms of exact line structure.
+You do a getLine which reads all the tokens of that line into a 
+buffer and then you do a parseToken to get each token.<p>
+
+The formats which currently use the parser are .X (which uses the
+line-independant API), .ase, .scenery and .off (which use the
+line-by-line-API).<p>
+Some functions are used by both APIs. For example:<p>
+
+<pre>
+	void openFile( const char* fname, const _ssgParserSpec* spec = 0 );
+</pre><p>
+
+In ssgParserSpec, you give the parser the specification of the format.
+You say which characters start a comment, which characters are skipable,
+which characters are used for braces (which are used to determine the
+parser's level-- useful for parser's which work recursively).
+Most important are the delimiters. These determine where one token ends and the 
+next one begins. For example, the first token of the line
+
+<pre>
+1234,567
+</pre>
+
+is <code>1234</code> if <code>","</code> is a delimiter and
+<code>1234,567</code> otherwise.
+The parser differentiates between skipable delimiters that
+are "swallowed" by the parser and non-skipable ones that are
+passed to the loader. So, regarding the example-line there 
+are three possibilities:
+<BR>
+<code>","</code> is not a delimiter => The line contains one token, namely
+<code>"1234,567"</code>
+<BR>
+<code>","</code> is a skipable delimiter => The line contains two tokens, namely
+<code>"1234"</code> and <code>"567"</code>
+<BR>
+<code>","</code> is a non-skipable delimiter => The line contains three tokens, 
+namely <code>"1234"</code>, <code>","</code> and <code>"567"</code>
+<BR>
+
+
+<H2>3. Writers</H2>
+For an example how to write out geometry and material, look at
+ssgSaveASE.
+
+For an easy example (geometry only), look at <code>ssgSaveDXF</code> or <code>ssgSaveTRI</code>.
+The function
+
+<pre>
+int ssgSaveXYZ ( const char *filename, ssgEntity *ent )
+</pre>
+
+normally calls a function 
+
+<pre>
+static void save_entities ( ssgEntity *e )
+</pre>
+
+which just recursively walks the scene graph.
+You should be able to use this function and just
+write a
+
+<pre>
+static void save_vtx_table ( ssgVtxTable *vt )
+</pre>
+
+which writes a <code>ssgVtxTable</code>.<p>
+
+
+
+<hr>
+<table width="100%">
+   	<tr>
+   		<td width="33%" align="left"><a href="non_class.html">&lt;= previous =</a></td>
+   		<td width="34%" align="center"><a href="index.html">Return to SSG Index</a></td>
+   		<td width="33%" align="right"></td>
+   	</tr>
+</table>
+<hr>
+<table>
+<tr>
+<td>
+<a href="http://validator.w3.org/check/referer"><img border="0" src="../valid-html40.png" alt="Valid HTML 4.0!" height="31" width="88"></a>
+<td>
+<ADDRESS>
+<A HREF="http://www.sjbaker.org">
+Steve J. Baker.</A>
+&lt;<A HREF="mailto:sjbaker1@airmail.net">sjbaker1@airmail.net</A>&gt;
+</ADDRESS>
+</table>
+</BODY>
+</HTML>
+

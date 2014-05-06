@@ -1,0 +1,65 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML>
+<HEAD>
+   <META http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+   <TITLE>PLIB Tools Home Page</TITLE>
+</HEAD>
+<BODY text="#B5A642" link="#8FFF8F" vlink="#18A515" alink="#20336B" bgcolor="#005000" background="../../doc/marble.png">
+
+<TABLE>
+<TR>
+<TD>
+<IMG SRC="../../doc/plib_logo.png" ALT="PLIB Logo" width=256 height=245>
+<br>
+</TD>
+<TD>
+<center>
+<H1>
+     <FONT SIZE=9>S</FONT><FONT SIZE=5>TEVE'S</FONT>
+     <FONT SIZE=9>P</FONT><FONT SIZE=5>ORTABLE</FONT>
+     <FONT SIZE=9>G</FONT><FONT SIZE=5>AME</FONT>
+     <FONT SIZE=9>T</FONT><FONT SIZE=5>OOLS</FONT>
+     <FONT SIZE=9>P</FONT><FONT SIZE=5>AGE.</FONT>
+</H1>
+</center>
+</TD>
+<TD>
+<ul>
+When the only tool you have is a hammer<br>
+every problem starts to look like a nail.
+</ul>
+<center>
+<A href="http://sourceforge.net"> 
+<IMG src="http://sourceforge.net/sflogo.php?group_id=382&type=1" width="88" height="31" border="0" ALT="Sourceforge Logo"></A> 
+</center>
+</TD>
+</TR>
+</TABLE>
+
+<H1>Useful Utility Tools for PLIB Applications.</H1>
+This is a suite of tools that will hopefully prove useful for the
+developers or users of PLIB-based applications. Currently, there is only one tool:
+<H1>The "af2rgb" texture converter.</H1>
+This portable utility converts textures, that is 2D bitmaps. It converts *.?af files as used with (old) Micro$oft
+Flightsimulator into .rgb files that are understood by all plib versions. New plib versions can handle
+*.?af textures, so this tool is only needed if you want to use the textures 
+with an old (for example 1.2.0) version of plib.
+<BR><BR>
+The usage is very simple:<BR>
+Go into the path of the textures you want to convert and call af2rgb. 
+The program will handle all *.?af files in that path (and ignore all other files).
+As a parameter, give it the path where the new textures shall be placed. 
+If you don't give it a path, then they will be written into the current dir.
+The new filename is always lowercase, so that the case is defined for the Un*x crowd.
+The first letter of the extension is added to the filename, so that it is unique.
+For example, lets say you have navion.1af and Navion.2af in your path. Af2rgb will create files
+called navion1.rgb and navion2.rgb.
+
+<hr>
+<ADDRESS>
+<A HREF="http://www.sjbaker.org">
+Steve J. Baker.</A>
+&lt;<A HREF="mailto:sjbaker1@airmail.net">sjbaker1@airmail.net</A>&gt;
+</ADDRESS>
+</BODY>
+</HTML>

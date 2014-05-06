@@ -1,0 +1,157 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML>
+<HEAD>
+   <META http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+   <TITLE>A Simple Scene Graph API for OpenGL.</TITLE>
+</HEAD>
+<BODY text="#B5A642" link="#8FFF8F" vlink="#18A515" alink="#20336B"
+ bgcolor="#005000" background="../marble.png">
+
+<center>
+<H1>SSG: A Simple Scene Graph API</H1>
+<H1>for OpenGL</H1>
+               by Steve Baker
+</center>
+<H2>Introduction</H2>
+Simple Scene Graph (SSG) is intended to be a really simple,
+low-impact, scene graph API that layers nicely on top
+of OpenGL using C++ and which works with or without GLUT.
+<p>
+SSG is a part of <A HREF="../index.html">PLIB</A>.
+<p>
+This document assumes a certain degree of knowledge of
+OpenGL.
+<p>
+SSG includes a subsidiary library of simple matix and vector
+math with support for some intersection testing, field-of-view
+culling and such like.  This is called
+<A HREF="../sg/index.html">'Simple Geometry' (SG)</A>.
+SG is used extensively by SSG - but is also useful as a
+standalone library.
+<p>
+A Scene Graph is essentially just a tree-structured database
+containing a hierarchy of branches - and a bunch of leaf nodes.
+Each leaf node does some OpenGL rendering - the branch nodes
+are intended to manage things like: field of view (FOV) culling,
+level of detail (LOD) management, transformations, and animation.
+<p>
+In addition, each leaf node has a structure tacked on to it
+to encapsulate OpenGL state information - and that in turn
+may optionally have a texture applied to it.
+<p>
+In addition to managing the scene graph, SSG contains code
+to manage the positions of cameras, lights and other rendering
+aspects of OpenGL.
+<H2>Symbol Conventions.</H2>
+Both SSG an SG follow conventions for symbols and tokens that
+are the conventions used by OpenGL and GLUT.
+<p>
+Hence, all SSG symbols for classes and functions start with <code>ssg</code>
+and all <code>#define</code> tokens start with <code>SSG</code>.  Functions and symbols
+that belong to the SG library similarly start with <code>sg</code> or <code>SG</code>.
+<p>
+Words within a class or function name are Capitalised and NOT
+separated with underscores. Words within <code>#define</code> tokens may
+be separated with underscores to make them readable.
+<H2>Initialisation.</H2>
+The first SSG call in any program must always be ssgInit(). Call
+ssgInit only after you have obtained an OpenGL rendering context
+(or called glutInit() and created a rendering window if you are
+using glut).
+<H2>Classes</H2>
+The following class hierarchy makes up the core package - which
+can be extended to add functionality or to change some underlying
+mechanisms.
+<pre>
+
+   class ssgBase
+    |__ class ssgSimpleList
+    |    |
+    |    |__ class ssgVertexArray
+    |    |__ class ssgNormalArray
+    |    |__ class ssgTexCoordArray
+    |    |__ class ssgColourArray
+    |    |__ class ssgIndexArray
+    |
+    |__ class ssgEntity
+    |    |
+    |    |__ class ssgLeaf
+    |    |    |__ class ssgVTable (deprecated)
+    |    |    |__ class ssgVtxTable
+    |    |          |__ class ssgTween
+    |    |          |__ class ssgVtxArray
+    |    |
+    |    |__ class ssgBranch
+    |         |__ class ssgRoot
+    |         |__ class ssgInvisible
+    |         |__ class ssgSelector
+    |         |    |__ class ssgTimedSelector
+    |         |    |__ class ssgRangeSelector
+    |         |
+    |         |__ class ssgBaseTransform
+    |         |    |__ class ssgTransform
+    |         |    |__ class ssgTexTrans
+    |         |
+    |         |__ class ssgCutout
+    |         |__ class ssgTweenController
+    |
+    |___ class ssgState
+    |     |__ class ssgSimpleState
+    |         |__ class ssgStateSelector
+    |
+    |___ class ssgTexture
+
+</pre>
+The general idea is that, all geometry is contained in ssgLeaf classes,
+all data heirarchy is in a ssgBranch classes and all OpenGL state information
+is in ssgStates.
+<p>
+You may not declare instances of ssgBase, ssgEntity, ssgBaseTransform,
+ssgLeaf or ssgState since they are all abstract classes.
+<p>
+It is presumed that applications will add new kinds of leaves, branches,
+states and textures to customise SSG to their needs.
+<BR><BR>
+Here are the further chapters:
+<BR><BR>
+<A HREF="ssgBase.html">The base class</A>
+<BR>
+<A HREF="ssgEntity.html">An entity of the graph</A>
+<BR>
+<A HREF="ssgLeaf.html">A leaf of the graph</A>
+<BR>
+<A HREF="branches.html">A branch of the graph</A>
+<BR>
+<A HREF="state.html">States (material etc)</A>
+<BR>
+<A HREF="ssgContext.html">ssgContext</A>
+<BR>
+<A HREF="non_class.html">Non-class functions: Loading, saving and optimizing databases</A>
+<BR>
+<A HREF="LoaderWriter.html">How to write plib-loaders and writers</A>
+<BR><BR>
+You can go through all the SSG-documentation by clicking on the "= next =&gt"-links at the bottom of each page.
+<BR><BR>
+<hr>
+<table width="100%">
+   	<tr>
+   		<td width="33%" align="left"></td>
+   		<td width="34%" align="center"></td>
+   		<td width="33%" align="right"><a href="ssgBase.html">= next =&gt;</a></td>
+   	</tr>
+</table>
+<hr>
+<table>
+<tr>
+<td>
+<a href="http://validator.w3.org/check/referer"><img border="0" src="../valid-html40.png" alt="Valid HTML 4.0!" height="31" width="88"></a>
+<td>
+<ADDRESS>
+<A HREF="http://www.sjbaker.org">
+Steve J. Baker.</A>
+&lt;<A HREF="mailto:sjbaker1@airmail.net">sjbaker1@airmail.net</A>&gt;
+</ADDRESS>
+</table>
+</BODY>
+</HTML>
+

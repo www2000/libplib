@@ -1,0 +1,936 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML>
+<HEAD>
+   <META http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+   <TITLE>A Simple Scene Graph API for OpenGL.</TITLE>
+</HEAD>
+<BODY text="#B5A642" link="#8FFF8F" vlink="#18A515" alink="#20336B"
+ bgcolor="#005000" background="../marble.png">
+
+<H2>Non-class Functions.</H2>
+So, with the class functions described above, it is
+fairly simple to construct a scene graph. So, now that
+you have one, what can you do with it?
+<pre>
+  void ssgCullAndDraw ( ssgRoot *root ) ;
+</pre>
+This call deals with the entire process of rendering the database.
+Your application need only call ssgInit(), build a database,
+create a current context and call ssgCullAndDraw using the root node
+of that database.
+<H3>Intersection Testing.</H3>
+Most applications need to test the scenery to see if moving
+objects have collided with it - there are several ways to do
+that - but they all share the same mechanisms:
+<pre>
+
+int  ssgIsect ( ssgRoot *root, sgSphere *s, sgMat4 m, ssgHit **results ) ;
+int  ssgHOT   ( ssgRoot *root, sgVec3    s, sgMat4 m, ssgHit **results ) ;
+int  ssgLOS   ( ssgRoot *root, sgVec3    s, sgMat4 m, ssgHit **results ) ;
+
+</pre>
+These three calls implement various ways to test the database for collisions,
+weapon impacts and such like. In each case, the search for a collision
+starts at 'root', and the database is transformed by the matrix 'm'
+before the test is evaluated - hence, 'm' is ususally the inverse of
+the matrix describing the test object's location.
+<ul>
+<li>ssgIsect intersects a sphere against the scene.
+<li>ssgHOT intersects a vertical line starting at the point 's' (remember,
+in SSG, positive Z is 'up'). This is often used to compute
+the Height-of-Terrain - hence the name 'HOT'.
+<li>ssgLOS intersects an arbitary vector whose direction is defined by 's'.
+</ul>
+The result in either case is an integer telling
+you how many triangles impacted the sphere/vector. If you need to know more
+about these intersections, pass the address of a ssgHit * variable as
+the last parameter and it will be returned pointing at a STATIC array
+of ssgHit structures. Thats a confusing explanation - and an example
+will help:
+<pre>
+
+ie:
+
+   ssgHit *results ;
+
+   int num_hits = ssgIsect ( root, &amp;sphere, mat, &amp;results ) ;
+
+   for ( int i = 0 ; i < num_hits ; i++ )
+   {
+     ssgHit *h = &(results [ i ]) ;
+
+     /* Do something with 'h' */
+   }
+
+</pre>
+Remember, you must finish using the results array before you do
+another ssgIsect/ssgHOT/ssgLOS because all three functions share
+the same results array.
+<p>
+By default, these functions only detect collisions with the front face
+of polygons.  You can make them detect only the back faces using:
+<pre>
+
+  void ssgSetBackFaceCollisions ( bool b ) ;
+
+</pre>
+<p>
+An ssgHit looks like this:
+<pre>
+
+class ssgHit
+{
+  ssgLeaf *leaf ;
+  int      triangle ;
+  sgVec4   plane ;
+  sgMat4   matrix ;
+
+  ssgHit ()
+  int getNumPathEntries () ;
+  ssgEntity *getPathEntry ( int i ) ;
+} ;
+
+</pre>
+The 'leaf' member points at the leaf node that impacted the sphere.
+The 'triangle' member tells you which triangle within the leaf
+did the impacting. The 'plane' member contains the plane equation
+of the impacting triangle and the 'matrix' element tells you
+the net result of concatenating all the transform nodes from
+the root to the leaf to the matrix you provided in the ssgIsect call.
+<p>
+It's possible for there to be multiple paths through the
+scene graph to the leaf node. Sometimes you'll need to
+look back up the tree to see nodes above the one that we actually
+impacted with. Hence, you can read all the ssgEntities that were
+traversed on the path from the root down to the leaf.  Calling 
+the 'getNumPathEntries' function to find the number of nodes
+along the path - and then 'getPathEntry(n)' to get the n'th entry
+in the path. The 'root' node will always be the zeroth entry
+in the path - and the leaf node will always be the last.
+<H3>Lights.</H3>
+SSG supports the eight standard OpenGL light sources as class 'ssgLight'.
+Since there are only a finite number of these, they all exist all the
+time - you just call:
+<pre>
+
+  ssgLight *ssgGetLight ( int i ) ;
+
+</pre>
+...to get the i'th light should you need to manipulate it.
+<pre>
+
+class ssgLight
+{
+  int isOn () ;
+  void on  () ;
+  void off () ;
+
+  void setPosition ( const sgVec3 pos ) ;
+  void setPosition ( float x, float y, float z ) ;
+
+  void setColour ( GLenum which , const sgVec4 colour ) ;
+  void setColour ( GLenum which , float r, float g, float b ) ;
+
+  void setHeadlight ( int head ) ;
+  int  isHeadlight () ;
+
+  void setSpotlight ( int spot ) ;
+  int  isSpotlight () ;
+
+  void setSpotDirection ( const sgVec3 dir ) ;
+  void setSpotDirection ( float x, float y, float z ) ;
+  void setSpotDiffusion ( float exponent, float cutoff = 90.0f ) ;
+  void setSpotAttenuation ( float constant, float linear, float quadratic ) ; 
+} ;
+
+</pre>
+Each light can be turned on or off - or tested to see if it's on or off.
+<p>
+Lights are positioned with 'setPosition()' - which can be relative
+to the origin of the world - or relative to the SSG camera (in 'headlight'
+mode).
+<p>
+If the 'spotlight' mode is enabled,
+then the light intensity has a certain distribution and attenuation.
+These parameters can be set with the 'setSpotXxx' methods.
+Otherwise, the light source is considered to be directional, 
+or infinitely far away (in the direction of its position).
+The 'spotlight' mode is initially disabled.
+
+<H3>Miscellany.</H3>
+It's convenient to find out how much texture memory has been
+consumed:
+<pre>
+
+  int ssgGetNumTexelsLoaded () ;
+
+</pre>
+(Bear in mind that a texel could be 16 or 32 bits depending on
+the hardware - and with MIPmapping enabled, 25% of the texels
+will be in the MIPmaps - so ssgGetNumTexelsLoaded will return
+a larger number than the total of the sizes of the input images
+might suggest.
+<H3>Loading Database Files.</H3>
+To load a model file into SSG, you can either call a loader
+function that is specific to the format of the file you
+wish to load - or you can call 'ssgLoad' - which parses
+the filename extension and calls the appropriate format-specific
+loader.
+<p>
+At time or writing, there are MANY loaders for SSG:
+<ul>
+<li> ssgLoadSSG - for '.ssg' files - the 'native' SSG format.
+<li> ssgLoadAC  - for '.ac' files - a somewhat obscure format produced
+                 by the 'AC3D' modelling tool - reasonably well tried
+                 and tested.
+<li> ssgLoad3ds - for '.3ds' files as produced by 3DStudio.
+<li> ssgLoadASE - 3DSMAX ASCII EXPORT Version 2.00, well tested
+<li> ssgLoadDXF - AutoCADs famous DXF format. well tested
+<li> ssgLoadFLT - OpenFlight. Works for OpenFlight files generated by
+recent versions of MultiGen - but not for those generated by some other
+tools such as Designers' Workbench.
+<li> ssgLoadMD2 - Quake MD2
+<li> ssgLoadOBJ - Wavefront, works well
+<li> ssgLoadTRI - simple Tri format from "Andy Colbournes Editor".
+<li> ssgLoadX - Microsofts DirectX-Format. Most features work.
+<li> ssgLoadOFF - Geomview's OFF
+<li> ssgLoadM - ???
+<li> ssgLoadATG - Ascii TerraGear. Used by Flight Gear Flight Sim.
+<li> ssgLoadVRML1 - VRML1 format, only partially implemented. 
+<li> ssgLoadIV - Inventor format, only partially implemented. 
+<li> ssgLoadStrip - The format of a stripifier.
+</ul>
+
+<pre>
+
+  typedef ssgBranch *(*ssgHookFunc)(char *) ;
+
+  ssgEntity *ssgLoad    ( const char *fname, const ssgLoaderOptions *options = NULL ) ;
+  
+  ssgEntity *ssgLoadSSG ( const char *fname, const ssgLoaderOptions *options = NULL ) ;
+  ssgEntity *ssgLoadAC  ( const char *fname, const ssgLoaderOptions *options = NULL ) ;
+  ssgEntity *ssgLoad3ds ( const char *fname, const ssgLoaderOptions *options = NULL ) ;
+  ...etc...
+
+</pre>
+Minimally, all you need to do is to call ssgLoadAC/ssgLoad3ds with the
+name of the file to load. However, most file formats (AC3D's
+and 3Dstudio's included) lack many desirable features, and it is also often
+necessary to store application-specific information in the
+file.
+<p>
+SSG's loaders will decode the comment fields found in the
+nodes of many common file formats and pass these onto the
+application via 'hookfunc'. This function should decode
+the string and construct whatever kind of SSG node it
+considers appropriate.
+<p>
+Similarly, the application may wish to embellish the
+ssgState of a loaded node - and since state information
+rarely has a comment field in most file formats, we
+pass the texture filename instead and expect the application
+to construct the entire ssgState:
+<pre>
+
+  void ssgSetAppStateCallback ( ssgState *(*cb)(char *) ) ;
+
+</pre>
+One common problem with file loaders is that it's
+often possible to refer to a second file from inside
+the first - but the <b>path</b> to that file is often
+not adequately defined by the original file. Hence,
+the application can specify a file path to be prepended
+to all model or texture file names.
+<pre>
+
+  void ssgModelPath   ( char *path ) ;
+  void ssgTexturePath ( char *path ) ;
+
+</pre>
+You can only supply one path. If you need additional features, use the
+function <code>ulFindFile</code> (for more see util-library-doc). 
+
+The last three functions simply set values in the _ssgCurrentOptions
+(type ssgLoaderOptions), for example:
+
+<pre>
+inline void ssgModelPath   ( const char *path )
+{
+  _ssgCurrentOptions -> setModelDir ( path ) ;
+}
+</pre>
+
+For more on ssgLoaderOptions see also the next page of this doc.
+
+<p>
+
+Some loaders for file formats that use texture formats not 
+supported by ssg use this functions to find textures:
+<pre>
+void ssgFindOptConvertTexture( char * filepath, char * tfname ) 
+</pre>
+It finds and optionally (= if necessary) converts the texture.
+This is only really implemented for Windo$ :-(, for all others it
+should just be the two lines you will find in the comment. I didn't
+test it, that's the reason I commented it out. But it will warn you
+when you have to convert something, so even for non-Windo$-users the
+new function is already a step forward.
+For the actual conversion, at first I wanted to use GIMP. So, in Deja,
+I looked for "+gimp +convert +batch" and similar strings. I found 
+several people asking, but almost all the answer were to use
+ImageMagick instead. ImageMagick is free as in beer. Also, the docs I
+got with the newest gimp is extremely sparse :-(. Therefore, I tried
+ImageMagick and this worked straight away. You should find ImageMagick
+under
+<p>
+http://www.wizards.dupont.com/cristy/ImageMagick.html
+<p>
+Plib uses the ImageMagick application "convert". Since there are other
+convert.exe-programs on my computer, I had to copy the ImageMagick
+stuff into the directory of my plib-application, so that it uses the correct
+convert.exe.
+<p>
+
+
+Most file formats contain considerable numbers of redundant 
+nodes (because of the way people build using these tools).
+This function walks a database sub-tree multiplying
+out any ssgTransform nodes and replacing them with
+ssgBranch'ed - unless they have userdata associated with them.
+Any branch nodes with zero kids are deleted - any with just
+one kid are eliminated and the child node pushed up one level.
+<pre>
+
+  void ssgFlatten ( ssgEntity *ent ) ;
+
+</pre>
+It's important for 3D performance to optimise
+triangles into triangle strips or fans. Since most
+file formats don't record strip/fan information,
+it's useful to call:
+<pre>
+
+  void ssgStripify ( ssgEntity *ent ) ;
+
+</pre>
+<H3>Saving Database Files.</H3>
+Most SSG programs will simply load a file and display it in
+some way - but occasionally, it's useful to be able to write
+a file back out again.
+<p>
+To write a model file from SSG, you can either call a writer
+function that is specific to the format of the file you
+wish to save - or you can call 'ssgSave' - which parses
+the filename extension and calls the appropriate format-specific
+writer.
+<p>
+Saving into ssg-format is done with these functions:
+<ul>
+<li> ssgSaveSSG - for '.ssg' files - the 'native' SSG format.
+</ul>
+<pre>
+
+  int ssgSave    ( char *fname, ssgEntity *ent ) ;
+  int ssgSaveSSG ( char *fname, ssgEntity *ent ) ;
+
+</pre>
+This returns TRUE if the operation worked - FALSE if it failed.
+You will also find writers for the 3DS, AC, ASE, ATG, DXF, M, OBJ, OFF, QHI, TRI and
+X formats.
+
+<H3>Features of the file formats and status of the loaders/writers</H3>
+
+Here comes a table of the features of all the file formats and loaders and writers.
+VRML doesn't really work, so you won't find it here. 
+The "QHI" (QHull Input - a format used by a toll to create convex hulls)
+writer only writes a point cloud and suppoorts no other features, so I also didn't add it to the table.
+BTW, if you want to create convex hulls of existing geometry, you just need a few lines. Look
+into PPE (prettypoly editor, on SourceForge as well), into the file ppeCoreFuncs.cxx,
+function addConvexHull.
+The SSG loaders/writers support all
+features of the ssg-lib, so missing features mean they miss in the library (normaly because they miss in OpenGL)
+The letters mean:
+<BR><BR>
+A = feature not in file format
+<BR>
+B = feature in file format and not implemented, not planned.
+<BR>
+C = feature in file format and not implemented, but planned.
+<BR>
+D = feature in file format and partly implemented or not tested.
+<BR>
+E = feature in file format and implemented.
+<BR><BR>
+And here are the features with some explanaitions:
+<BR><BR>
+
+<ul>
+<li>Filled polys - Planar polygons. In the ssg-lib, this is the only primitive you can use to make "solid" looking models. This is a 2D primitive; it has no volume but an area.
+<li># sides - No of sides per poly. This is of course equal to number of vertices per poly. Some formats support only triangles, some
+also quads and some support n-sided polys, that is they have no restrictions.
+<li>Lines - for example used for high voltage lines in a flight simulator.
+This is a 1D primitive; it has no area but a length.
+<li>Points - for example used for small lights.
+This is a "0D" primitive; it has no length.
+<li>Sub objects - The complete model may consist of several sub models.
+There are several reasons one wants this, for example to make the structure of the model
+clearer to humans, to easily enable humans or programs to move, colour, texture, animate etc 
+one part, for example one wheel of the complete model.
+<li>Hierarchie - You not only have sub objects, but there is a parent-kid relation between some, 
+for example, the upper arm of a human model may be "under" the body and the lower arm "under" the upper arm etc.
+<li>DAG - direct acyclic graph means that the hierarchie may not only be a tree where
+each node has exactly one parent (apart from the root, which has zero parents), but that nodes may have more than one parent.
+Used for example in cars to have the wheel geometry only once. If the one wheel-node has four parents, this means 
+it will be rendered four times when the scene is drawn.
+<li>Colours - Things can have a colour. Uncoloured objects are always white.
+<li>Textures - Texture things with 2D bitmaps.
+<li>Texture coordinates - The texture mapping is arbitrary.
+<li>Texture coord. per face AND vertex - If a vertex is part of three faces, then this feature 
+allows it to have three texture coordinates. For example, a cube may have 18 texture coordinates, even if it has much fewer vertices.
+<li>Texture per face - each face may have another texture bitmap. Formats (and the ssg lib) that 
+don't have this have to increase the number of nodes to get this effect.
+<li>Transparency - Some polys may be partially or completely transparent.
+<li>Animation - There may be many different sorts of animation.
+<li>Billboards - geometry that automatically rotates so it always faces the viewer. Normaly flat.
+As an example, can be used to model trees in a driving simulator.
+<li>LOD - stands for "Level of Detail" and means there can be geometries of varying 
+complexity for the model, so for example, if it is near the viewer you use many polys 
+and if it is far away you use few polys so that the impact on rendering speed is low.
+<li>Other switches - switch means you can switch the visibility of some nodes on and off.
+<li>Ascii or Binary - A stands for Ascii, B for Binary files.
+</ul>
+
+<table width="100%" border="1" cellspacing="0" cellpadding="0">
+  <tr>
+    <td>&nbsp;Feature</td>
+    <td>&nbsp;3DS<BR>load</td>
+    <td>&nbsp;AC<BR>load/<BR>save</td>
+    <td>&nbsp;ASC<BR>save</td>
+    <td>&nbsp;ASE<BR>load/<BR>save</td>
+    <td>&nbsp;ATG<BR>load/<BR>save</td>
+    <td>&nbsp;DXF<BR>load</td>
+    <td>&nbsp;DXF<BR>save</td>
+    <td>&nbsp;FLT<BR>load</td>
+    <td>&nbsp;M<BR>load/<BR>save</td>
+    <td>&nbsp;MD2<BR>load</td>
+    <td>&nbsp;OBJ<BR>load</td>
+    <td>&nbsp;OBJ<BR>save</td>
+    <td>&nbsp;OFF<BR>load/<BR>save</td>
+    <td>&nbsp;SSG<BR>load/<BR>save</td>
+    <td>&nbsp;Strip<BR>load</td>
+    <td>&nbsp;TRI<BR>load/<BR>save</td>
+    <td>&nbsp;X<BR>load</td>
+    <td>&nbsp;IV<BR>load</td>
+    <td>&nbsp;VRML1<BR>load</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Filled polys</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+	<td>&nbsp;E</td>
+    <td>&nbsp;E(5)</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E/D</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+  </tr>
+  <tr>
+    <td>&nbsp;# sides</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;n/3</td>
+    <td>&nbsp;3</td>
+    <td>&nbsp;3</td>
+	<td>&nbsp;n</td>
+    <td>&nbsp;3,4(4)</td>
+    <td>&nbsp;3</td>
+    <td>&nbsp;n</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;n?</td>
+    <td>&nbsp;3</td>
+    <td>&nbsp;n</td>
+	<td>&nbsp;n(4)</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;3?</td>
+    <td>&nbsp;n</td>
+    <td>&nbsp;3,4</td>
+    <td>&nbsp;3,4</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Lines</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;D/C</td>
+    <td>&nbsp;C</td>
+    <td>&nbsp;E</td>
+	<td>&nbsp;A(?)</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A?</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;B</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Points</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;C</td>
+    <td>&nbsp;A(?)</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;B</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Sub objects</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E/D</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A(?)</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;C-D</td>
+    <td>&nbsp;C-D</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Hierarchie</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E/D</td>
+    <td>&nbsp;E?</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A(?)</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;C</td>
+    <td>&nbsp;C</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;C</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+  </tr>
+  <tr>
+    <td>&nbsp;DAG</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A(?)</td>
+	<td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;A(?)</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Colours</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E/D</td>
+    <td>&nbsp;E?</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;?</td>
+	<td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;D(1)</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;D</td>
+    <td>&nbsp;C</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;B</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Textures</td>
+    <td>&nbsp;D</td>
+    <td>&nbsp;E/D</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;D</td>
+    <td>&nbsp;C</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Texture coord.</td>
+    <td>&nbsp;D</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+	<td>&nbsp;E</td>
+	<td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;C</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Texture coord.<BR>per face<BR>AND vertex</td>
+    <td>&nbsp;D(?)</td>
+    <td>&nbsp;D(?)</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+	<td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;C</td>
+    <td>&nbsp;B(?)</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;C</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;E</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Texture per face</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;D(?)/-</td>
+    <td>&nbsp;C</td>
+    <td>&nbsp;A</td>
+	<td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;B(?)</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;C</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;A</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Transparency</td>
+    <td>&nbsp;D</td>
+    <td>&nbsp;D</td>
+    <td>&nbsp;D</td>
+    <td>&nbsp;D</td>
+    <td>&nbsp;A(?)</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;A?</td>
+    <td>&nbsp;A?</td>
+    <td>&nbsp;B(?)</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;B</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Animation</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;B(2)</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;A?</td>
+    <td>&nbsp;A?</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;B or C</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;A</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Billboards</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;A</td>
+  </tr>
+  <tr>
+    <td>&nbsp;LOD</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;B</td>
+  </tr>
+  <tr>
+    <td>&nbsp;Other switches</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;D</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;E</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;D</td>
+    <td>&nbsp;D</td>
+  </tr>
+  <tr>
+    <td>&nbsp;A=Ascii or<BR>B=Binary</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;B</td>
+    <td>&nbsp;?</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A+B(3)</td>
+    <td>&nbsp;A</td>
+    <td>&nbsp;A</td>
+  </tr>
+</table>
+footnotes:
+<BR><BR>
+(1) problematic for ancient files
+<BR>
+(2) DOFs are not implemented
+<BR>
+(3) There is an ascii- and a binary X-file-format.
+I only implemented the ascii-one and probably wont implement the 
+binary one. There is a free (as in beer) converter by Microsoft 
+running under Windo$. 
+<BR>
+(4) It is possible to have polys with an arbitrary number of vertices in ssg.
+But then you may only use one poly per node. Also, you can not mix 3 and 4 sided polys in one node.
+<BR>
+(5) Some OpenGL modes, like for example Quads, are ignored. This means some parts of the model 
+may dissappear when saving into DXF files.
+<BR><BR>
+Additional info on some formats:
+
+<BR><BR>
+ATG:
+<BR>
+ATG stands for ascii TerraGear. Loading of TriStrips and TriFans not implemented yet.
+Untextured parts are lost, for example when you save and load
+Steve Bakers Tuxedo, you will loose the feet, since they are not
+textured.
+The files written are not optimal, they use no strips/fans, 
+only have triangles etc.
+Also, one vertex that needs several texture coords is written out several
+times.
+
+
+<BR><BR>
+3ds-writer:
+<BR>
+I (Per) have one basicly working, but since there seems to be so much else to do 
+with plib right now, I'm a bit reluctant to put my energy into it. Also, the 
+only 3ds-loader I've tested files written by it with is the one in ssg :-)
+
+
+<BR><BR>
+OFF loader:
+<BR>
+Warning: There are two formats called OFF! We support the OFF from GeomView, 
+not the one from DEC.
+We support 2D and 3D, but no higher dimensions.
+
+<BR><BR>
+.SSG file loader/writer:
+<BR>
+We number .SSG file formats so that for example the loaders knows
+what to expect. Until now, there is
+<BR>
+format "0" - Used by plib 1.2.0, 1.3.x
+<BR>
+format "1" - Will be used by 1.4.0
+<BR>
+Currently, we are between "0" and "1". Normally, we want to keep at least our loader
+compatible, but the changes from zero to one would bloat the code so much and it seems 
+.SSG file version zero were only used by people for temporary files, so we decided to make an incompatible break.
+If you need to read or write version zero, either get plib from SVN with the date 14.1.2001, or, if you are a Windo$ person, get
+<a href="prettypoly.sourceforge.net/download/ppewinbin_ssg_version_zero.zip">prettypoly.sourceforge.net/download/ppewinbin_ssg_version_zero.zip</a>
+This allows you to save and load .ssg version zero.
+<BR>
+One of the new features in format "1" might be worth mentioning.
+It is now possible to load and save *any* class derived from ssgBase (notably
+the ssgAux node types). 
+All that is needed for saving to work is an implementation of the virtual save() method.
+Loading requires the corresponing load() method, and also means for creating
+an instance of the class, which is accomplished
+by a call to ssgRegisterType(). 
+See the ssgAux implementation for example usage;
+the convenience function ssgaInit() registers the ssgAux classes.
+<BR><BR>
+.X file writer:
+<BR>
+Planned.
+<BR><BR>
+.X file loader:
+<BR>
+The .X-entity "Frame" is not yet implemented. 
+If you convert files into .X with "3D Exploration", you can check the
+option "without frames".
+
+<BR><BR>
+VRML1/IV file loaders:
+<BR>
+These are only partially implemented, and are useful primarily for
+mesh-based models (textured or untextured). It would be useful to add
+material support to these loaders, as well as explicit normal definition.
+
+<hr>
+<table width="100%">
+   	<tr>
+   		<td width="33%" align="left"><a href="ssgContext.html">&lt;= previous =</a></td>
+   		<td width="34%" align="center"><a href="index.html">Return to SSG Index</a></td>
+   		<td width="33%" align="right"><a href="LoaderWriter.html">= next =&gt;</a></td>
+   	</tr>
+</table>
+<hr>
+<table>
+<tr>
+<td>
+<a href="http://validator.w3.org/check/referer"><img border="0" src="../valid-html40.png" alt="Valid HTML 4.0!" height="31" width="88"></a>
+<td>
+<ADDRESS>
+<A HREF="http://www.sjbaker.org">
+Steve J. Baker.</A>
+&lt;<A HREF="mailto:sjbaker1@airmail.net">sjbaker1@airmail.net</A>&gt;
+</ADDRESS>
+</table>
+</BODY>
+</HTML>
+
