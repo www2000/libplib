@@ -25,6 +25,9 @@ if(InSourceBuild)
 endif(InSourceBuild)
 
 
+find_package(OpenGL  REQUIRED)
+
+
 option(ENABLE_FNT    "Set to ON to build the Font lib (default)" ON)
 option(ENABLE_JS     "Set to ON to build the Joystick lib (default)" ON)
 option(ENABLE_NET    "Set to ON to build the Net lib (default)" ON)
